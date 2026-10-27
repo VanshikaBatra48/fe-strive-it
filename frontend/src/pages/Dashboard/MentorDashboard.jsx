@@ -1,122 +1,9 @@
 import { useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../../components/ThemeToggle";
-
-// Initial Mentees assigned to the Mentor (Amit Sharma)
-const initialAssignedMentees = [
-  {
-    id: 6,
-    name: "Anjali Rao",
-    email: "anjali@example.com",
-    track: "Frontend (React & UI)",
-    progress: 75,
-    status: "Active",
-    joinedOn: "Apr 15, 2025",
-    avatarBg: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
-    attendance: "98%",
-    currentTask: "Build Responsive TMS Dashboard UI",
-    pendingReviews: 1,
-  },
-  {
-    id: 11,
-    name: "Dev Patel",
-    email: "dev@example.com",
-    track: "Backend (Node & Express)",
-    progress: 60,
-    status: "Active",
-    joinedOn: "Apr 6, 2025",
-    avatarBg: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
-    attendance: "94%",
-    currentTask: "REST API Endpoint Authentication",
-    pendingReviews: 1,
-  },
-  {
-    id: 16,
-    name: "Tanvi Jain",
-    email: "tanvi@example.com",
-    track: "Fullstack (MERN)",
-    progress: 85,
-    status: "Active",
-    joinedOn: "Mar 27, 2025",
-    avatarBg: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
-    attendance: "100%",
-    currentTask: "MongoDB Aggregation Pipeline",
-    pendingReviews: 0,
-  },
-  {
-    id: 18,
-    name: "Aakash Verma",
-    email: "aakash@example.com",
-    track: "Frontend (React & Tailwind)",
-    progress: 40,
-    status: "Inactive",
-    joinedOn: "Apr 18, 2025",
-    avatarBg: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
-    attendance: "82%",
-    currentTask: "Formik Validation & Custom Hooks",
-    pendingReviews: 1,
-  },
-];
-
-// Initial Tasks managed by Mentor
-const initialTasks = [
-  {
-    id: 101,
-    title: "Build Responsive TMS Dashboard UI",
-    menteeName: "Anjali Rao",
-    menteeEmail: "anjali@example.com",
-    priority: "High",
-    dueDate: "2026-10-28",
-    status: "Submitted", // In Progress, Submitted, Completed, Needs Revision
-    submissionUrl: "https://github.com/anjali-rao/tms-dashboard-ui",
-    demoUrl: "https://tms-anjali.vercel.app",
-    score: null,
-    feedback: "",
-    description: "Implement responsive layout with Tailwind CSS matching design specifications.",
-  },
-  {
-    id: 102,
-    title: "REST API Endpoint Authentication with JWT",
-    menteeName: "Dev Patel",
-    menteeEmail: "dev@example.com",
-    priority: "High",
-    dueDate: "2026-10-30",
-    status: "Submitted",
-    submissionUrl: "https://github.com/dev-patel/auth-service-jwt",
-    demoUrl: "",
-    score: null,
-    feedback: "",
-    description: "Set up login/register routes with bcrypt password hashing and Bearer tokens.",
-  },
-  {
-    id: 103,
-    title: "MongoDB Aggregation Pipeline for Analytics",
-    menteeName: "Tanvi Jain",
-    menteeEmail: "tanvi@example.com",
-    priority: "Medium",
-    dueDate: "2026-10-25",
-    status: "Completed",
-    submissionUrl: "https://github.com/tanvi-j/mongo-analytics",
-    demoUrl: "",
-    score: 95,
-    feedback: "Exceptional indexing optimization and clean aggregation stages. Well done!",
-    description: "Write queries to aggregate monthly intern hours and project status counts.",
-  },
-  {
-    id: 104,
-    title: "Formik Validation & Custom Hooks",
-    menteeName: "Aakash Verma",
-    menteeEmail: "aakash@example.com",
-    priority: "Low",
-    dueDate: "2026-11-05",
-    status: "In Progress",
-    submissionUrl: "",
-    demoUrl: "",
-    score: null,
-    feedback: "",
-    description: "Implement Yup schemas with dynamic error messaging on multi-step forms.",
-  },
-];
+import useAuth from "../../hooks/useAuth";
+import useMentors from "../../hooks/useMentors";
+import useTasks from "../../hooks/useTasks";
 
 function getInitials(name = "") {
   const parts = name.trim().split(" ");
@@ -133,27 +20,36 @@ const MentorDashboard = () => {
   // Today's date string YYYY-MM-DD for date validation
   const todayDateString = useMemo(() => new Date().toISOString().split("T")[0], []);
 
-  // Current logged in mentor details
-  const [mentorUser] = useState(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem("user"));
-      if (stored && typeof stored === "object") {
-        return {
-          name: stored.name || "Amit Sharma",
-          email: stored.email || "amit@example.com",
-          role: "mentor",
-        };
-      }
-    } catch {
-      // fallback
-    }
-    return { name: "Amit Sharma", email: "amit@example.com", role: "mentor" };
-  });
+  // Current logged in mentor details from AuthContext
+  const { user: authUser, logout } = useAuth();
+  const mentorUser = authUser || {
+    name: "Mentor",
+    email: "",
+    role: "mentor",
+  };
+
+  const {
+    assignedMentees,
+    loading: menteesLoading,
+    error: menteesError,
+  } = useMentors(mentorUser.name);
+
+  // Only database assigned mentees
+  const mentees = assignedMentees;
+
+  const {
+    tasks,
+    loading: tasksLoading,
+    error: tasksError,
+    assignTask,
+    evaluateTask,
+  } = useTasks();
+
+  const [actionLoading, setActionLoading] = useState(false);
+  const [notification, setNotification] = useState(null);
 
   // State
   const [activeTab, setActiveTab] = useState("dashboard"); // "dashboard", "mentees", "tasks", "reports"
-  const [mentees] = useState(initialAssignedMentees);
-  const [tasks, setTasks] = useState(initialTasks);
 
   // Filters
   const [menteeSearch, setMenteeSearch] = useState("");
@@ -169,7 +65,7 @@ const MentorDashboard = () => {
   // New Task Form
   const [newTask, setNewTask] = useState({
     title: "",
-    menteeName: initialAssignedMentees[0].name,
+    menteeName: "",
     priority: "Medium",
     dueDate: todayDateString,
     description: "",
@@ -209,24 +105,13 @@ const MentorDashboard = () => {
     return tasks.filter((t) => t.status === "Submitted").length;
   }, [tasks]);
 
-  // Switch role handler for pair testing
-  const switchRole = (newRole) => {
-    const userObj = {
-      role: newRole,
-      email: `${newRole}@example.com`,
-      name: newRole === "admin" ? "Administrator" : newRole === "mentor" ? "Amit Sharma" : "Anjali Rao",
-    };
-    localStorage.setItem("user", JSON.stringify(userObj));
-    window.location.reload();
-  };
-
   const handleLogout = () => {
-    localStorage.removeItem("user");
+    logout();
     navigate("/");
   };
 
   // Assign task handler with strict date validation (MUST NOT BE IN THE PAST)
-  const handleAssignTask = (e) => {
+  const handleAssignTask = async (e) => {
     e.preventDefault();
     if (!newTask.title.trim()) return;
 
@@ -243,49 +128,63 @@ const MentorDashboard = () => {
     setDateError("");
     const selectedMentee = mentees.find((m) => m.name === newTask.menteeName);
     const created = {
-      id: Date.now(),
-      title: newTask.title,
-      menteeName: newTask.menteeName,
-      menteeEmail: selectedMentee?.email || "mentee@example.com",
+      title: newTask.title.trim(),
+      menteeName: newTask.menteeName || mentees[0]?.name,
+      menteeEmail: selectedMentee?.email || "",
+      mentorName: mentorUser.name,
+      mentorEmail: mentorUser.email,
+      track: selectedMentee?.track || "Fullstack Track",
       priority: newTask.priority,
       dueDate: newTask.dueDate,
-      status: "In Progress",
-      submissionUrl: "",
-      demoUrl: "",
-      score: null,
-      feedback: "",
       description: newTask.description,
     };
 
-    setTasks([created, ...tasks]);
-    setShowAssignModal(false);
-    setNewTask({
-      title: "",
-      menteeName: mentees[0]?.name || "",
-      priority: "Medium",
-      dueDate: todayDateString,
-      description: "",
-    });
+    setActionLoading(true);
+    const res = await assignTask(created);
+    setActionLoading(false);
+
+    if (res.success) {
+      setShowAssignModal(false);
+      setNewTask({
+        title: "",
+        menteeName: mentees[0]?.name || "",
+        priority: "Medium",
+        dueDate: todayDateString,
+        description: "",
+      });
+      setNotification({
+        type: "success",
+        message: `Task assigned to ${created.menteeName} successfully!`,
+      });
+      setTimeout(() => setNotification(null), 3500);
+    } else {
+      alert(res.error || "Failed to assign task");
+    }
   };
 
   // Evaluate submission handler
-  const handleEvaluateSubmission = (e) => {
+  const handleEvaluateSubmission = async (e) => {
     e.preventDefault();
     if (!evaluatingTask) return;
 
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === evaluatingTask.id
-          ? {
-              ...t,
-              status: evaluation.status,
-              score: Number(evaluation.score),
-              feedback: evaluation.feedback,
-            }
-          : t
-      )
-    );
-    setEvaluatingTask(null);
+    setActionLoading(true);
+    const res = await evaluateTask(evaluatingTask.id, {
+      status: evaluation.status,
+      score: Number(evaluation.score),
+      feedback: evaluation.feedback,
+    });
+    setActionLoading(false);
+
+    if (res.success) {
+      setEvaluatingTask(null);
+      setNotification({
+        type: "success",
+        message: "Evaluation submitted successfully!",
+      });
+      setTimeout(() => setNotification(null), 3500);
+    } else {
+      alert(res.error || "Failed to submit evaluation");
+    }
   };
 
   return (
@@ -475,25 +374,7 @@ const MentorDashboard = () => {
                     </span>
                   </div>
 
-                  <div className="py-1">
-                    <p className="px-4 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      Switch Role (Testing)
-                    </p>
-                    <button
-                      onClick={() => switchRole("admin")}
-                      className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
-                    >
-                      <span className="w-2 h-2 rounded-full bg-blue-500" />
-                      <span>Admin Dashboard</span>
-                    </button>
-                    <button
-                      onClick={() => switchRole("mentee")}
-                      className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
-                    >
-                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                      <span>Mentee Dashboard</span>
-                    </button>
-                  </div>
+
 
                   <div className="border-t border-slate-100 dark:border-slate-700 pt-1">
                     <button
@@ -511,6 +392,39 @@ const MentorDashboard = () => {
             </div>
           </div>
         </div>
+
+        {/* Notification Toast */}
+        {notification && (
+          <div className="mb-5 p-3.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 rounded-xl text-sm flex items-center justify-between shadow-xs animate-fadeIn">
+            <div className="flex items-center gap-2.5">
+              <svg className="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="font-medium">{notification.message}</span>
+            </div>
+            <button onClick={() => setNotification(null)} className="text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-200 text-lg font-bold cursor-pointer leading-none">&times;</button>
+          </div>
+        )}
+
+        {/* Global Error Banner */}
+        {(menteesError || tasksError) && (
+          <div className="mb-5 p-3.5 bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-300 rounded-xl text-sm flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <svg className="w-5 h-5 text-rose-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="font-medium">{menteesError || tasksError}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Loading Indicator */}
+        {(menteesLoading || tasksLoading) && (
+          <div className="mb-5 p-3.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-700 dark:text-indigo-300 rounded-xl text-sm flex items-center gap-3">
+            <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+            <span className="font-medium">Syncing mentor data from backend...</span>
+          </div>
+        )}
 
         {/* Page Title & Subtitle */}
         <div className="mb-6">
@@ -797,6 +711,14 @@ const MentorDashboard = () => {
                   </div>
                 </div>
               ))}
+
+              {filteredMentees.length === 0 && (
+                <div className="col-span-full py-12 text-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-8">
+                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                    No mentees found in the database.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -928,6 +850,14 @@ const MentorDashboard = () => {
                       </td>
                     </tr>
                   ))}
+
+                  {filteredTasks.length === 0 && (
+                    <tr>
+                      <td colSpan="7" className="px-6 py-8 text-center text-slate-400 dark:text-slate-500 text-xs">
+                        No tasks found in the database.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1090,9 +1020,10 @@ const MentorDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer flex items-center gap-2"
                 >
-                  Create & Assign
+                  {actionLoading ? "Assigning..." : "Create & Assign"}
                 </button>
               </div>
             </form>

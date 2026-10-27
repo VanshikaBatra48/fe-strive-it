@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import * as Yup from "yup";
 import { Formik, Form, Field, ErrorMessage } from "formik";
 import { useNavigate } from "react-router-dom";
+import useAuth from "../hooks/useAuth";
 
 // High-resolution dedicated background images for Intern Management System
 import bg1 from "../assets/images/intern_bg_1.jpg";
@@ -21,8 +22,21 @@ const validationSchema = Yup.object({
 
 const Login = () => {
     const navigate = useNavigate();
+    const { login, isAuthenticated, user } = useAuth();
     const [showPassword, setShowPassword] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [serverError, setServerError] = useState("");
+
+    // If already authenticated, navigate to dashboard or changePassword
+    useEffect(() => {
+        if (isAuthenticated) {
+            if (user?.firstLogin) {
+                navigate("/changePassword");
+            } else {
+                navigate("/dashboard");
+            }
+        }
+    }, [isAuthenticated, user, navigate]);
 
     // Automatically cycle through background images with smooth transitions
     useEffect(() => {
@@ -32,32 +46,19 @@ const Login = () => {
         return () => clearInterval(interval);
     }, []);
 
-    const handleLogin = (values, { setSubmitting }) => {
-        let role = "admin";
-        try {
-            const stored = JSON.parse(localStorage.getItem("user"));
-            if (stored?.role) role = stored.role;
-        } catch {
-            // ignore
-        }
-
-        if (values.email.toLowerCase().includes("mentor")) {
-            role = "mentor";
-        } else if (values.email.toLowerCase().includes("mentee")) {
-            role = "mentee";
-        }
-
-        localStorage.setItem(
-            "user",
-            JSON.stringify({
-                role,
-                email: values.email,
-                name: values.email.split("@")[0],
-            })
-        );
-
+    const handleLogin = async (values, { setSubmitting }) => {
+        setServerError("");
+        const res = await login(values.email, values.password);
         setSubmitting(false);
-        navigate("/dashboard");
+        if (res.success) {
+            if (res.user?.firstLogin || res.redirectTo === '/changePassword' || res.redirectTo === '/change-password') {
+                navigate("/changePassword");
+            } else {
+                navigate("/dashboard");
+            }
+        } else {
+            setServerError(res.error || "Failed to sign in. Please check your credentials.");
+        }
     };
 
     return (
@@ -104,6 +105,16 @@ const Login = () => {
                         Sign in to access your TMS management dashboard.
                     </p>
                 </div>
+
+                {/* Server Error Alert */}
+                {serverError && (
+                    <div className="mb-6 p-3.5 bg-rose-500/20 border border-rose-500/40 rounded-xl text-rose-200 text-xs flex items-center gap-2.5 backdrop-blur-sm animate-shake">
+                        <svg className="w-5 h-5 text-rose-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>{serverError}</span>
+                    </div>
+                )}
 
                 {/* Formik Form */}
                 <Formik

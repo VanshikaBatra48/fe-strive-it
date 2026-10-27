@@ -1,67 +1,10 @@
 import { useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../../components/ThemeToggle";
+import useAuth from "../../hooks/useAuth";
+import useTasks from "../../hooks/useTasks";
 
-// Initial Mentee's Assignments
-const initialMenteeTasks = [
-  {
-    id: 101,
-    title: "Build Responsive TMS Dashboard UI",
-    track: "React & Tailwind CSS",
-    priority: "High",
-    dueDate: "2026-10-28",
-    status: "Submitted", // "In Progress", "Submitted", "Completed"
-    submissionUrl: "https://github.com/anjali-rao/tms-dashboard-ui",
-    demoUrl: "https://tms-anjali.vercel.app",
-    score: null,
-    mentorFeedback: "Under active review by Amit Sharma. Evaluation will be posted shortly.",
-    description:
-      "Implement responsive layout with Tailwind CSS matching design specifications. Ensure sidebar is fixed and tables are scrollable.",
-  },
-  {
-    id: 105,
-    title: "Custom Formik Hook & Yup Validation",
-    track: "React Forms",
-    priority: "Medium",
-    dueDate: "2026-11-02",
-    status: "In Progress",
-    submissionUrl: "",
-    demoUrl: "",
-    score: null,
-    mentorFeedback: "",
-    description:
-      "Create reusable Formik wrapper components for email, password, and select inputs with real-time feedback.",
-  },
-  {
-    id: 106,
-    title: "State Management with Context API & Reducers",
-    track: "React Architecture",
-    priority: "High",
-    dueDate: "2026-10-20",
-    status: "Completed",
-    submissionUrl: "https://github.com/anjali-rao/context-api-demo",
-    demoUrl: "https://anjali-state.vercel.app",
-    score: 96,
-    mentorFeedback:
-      "Excellent modular structure! Your action creators and reducer separation are clean and scalable.",
-    description:
-      "Refactor global authentication state and user preference toggles using React createContext and useReducer.",
-  },
-  {
-    id: 107,
-    title: "Git Workflow & Branching Strategy Exercise",
-    track: "DevOps & Collaboration",
-    priority: "Low",
-    dueDate: "2026-10-14",
-    status: "Completed",
-    submissionUrl: "https://github.com/anjali-rao/git-practice-repo",
-    demoUrl: "",
-    score: 92,
-    mentorFeedback: "Well-crafted commit messages and clean rebase history. Great branch naming conventions.",
-    description:
-      "Demonstrate feature branching, PR review workflows, and merge conflict resolution.",
-  },
-];
+// Helper to get 2-letter initials
 
 function getInitials(name = "") {
   const parts = name.trim().split(" ");
@@ -75,36 +18,42 @@ const MenteeDashboard = () => {
   const navigate = useNavigate();
   const mainRef = useRef(null);
 
-  // Current logged in mentee details
-  const [menteeUser] = useState(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem("user"));
-      if (stored && typeof stored === "object") {
-        return {
-          name: stored.name || "Anjali Rao",
-          email: stored.email || "anjali@example.com",
-          role: "mentee",
-          track: "Frontend (React & UI Engineering)",
-          mentor: "Amit Sharma",
-          mentorEmail: "amit@example.com",
-        };
-      }
-    } catch {
-      // fallback
-    }
+  // Current logged in mentee details from AuthContext
+  const { user: authUser, logout } = useAuth();
+  const menteeUser = useMemo(() => {
     return {
-      name: "Anjali Rao",
-      email: "anjali@example.com",
+      name: authUser?.name || "Mentee",
+      email: authUser?.email || "",
       role: "mentee",
-      track: "Frontend (React & UI Engineering)",
-      mentor: "Amit Sharma",
-      mentorEmail: "amit@example.com",
+      track: authUser?.track || "Fullstack Engineering",
+      mentor: authUser?.assigned_to || authUser?.mentor || "Unassigned",
+      mentorEmail: authUser?.mentorEmail || "",
+      attendance: authUser?.attendance || "100%",
     };
-  });
+  }, [authUser]);
 
-  // State: "dashboard", "assignments", "feedback" (Badges removed, Feedback kept)
+  const {
+    tasks: allTasks,
+    loading: tasksLoading,
+    error: tasksError,
+    submitTask,
+  } = useTasks();
+
+  // Filter tasks strictly for this logged-in mentee from the database
+  const tasks = useMemo(() => {
+    if (!menteeUser.email && !menteeUser.name) return [];
+    return allTasks.filter(
+      (t) =>
+        (t.menteeEmail && t.menteeEmail.toLowerCase() === menteeUser.email?.toLowerCase()) ||
+        (t.menteeName && t.menteeName.toLowerCase() === menteeUser.name?.toLowerCase())
+    );
+  }, [allTasks, menteeUser]);
+
+  const [actionLoading, setActionLoading] = useState(false);
+  const [notification, setNotification] = useState(null);
+
+  // State: "dashboard", "assignments", "feedback"
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [tasks, setTasks] = useState(initialMenteeTasks);
   const [taskFilter, setTaskFilter] = useState("All");
 
   // Dropdown & Modals
@@ -132,50 +81,55 @@ const MenteeDashboard = () => {
     return tasks.filter((t) => t.mentorFeedback || t.status === "Completed" || t.status === "Submitted");
   }, [tasks]);
 
+  // Evaluated tasks & dynamic average score
+  const evaluatedTasks = useMemo(
+    () => tasks.filter((t) => typeof t.score === "number" && !isNaN(t.score)),
+    [tasks]
+  );
+  const avgScore = useMemo(() => {
+    if (evaluatedTasks.length === 0) return null;
+    return Math.round(
+      evaluatedTasks.reduce((acc, t) => acc + t.score, 0) / evaluatedTasks.length
+    );
+  }, [evaluatedTasks]);
+
   // Overall Progress
   const completedCount = useMemo(
     () => tasks.filter((t) => t.status === "Completed").length,
     [tasks]
   );
-  const progressPercentage = Math.round((completedCount / tasks.length) * 100);
-
-  // Switch role handler for pair testing
-  const switchRole = (newRole) => {
-    const userObj = {
-      role: newRole,
-      email: `${newRole}@example.com`,
-      name: newRole === "admin" ? "Administrator" : newRole === "mentor" ? "Amit Sharma" : "Anjali Rao",
-    };
-    localStorage.setItem("user", JSON.stringify(userObj));
-    window.location.reload();
-  };
+  const progressPercentage =
+    tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
+    logout();
     navigate("/");
   };
 
   // Submit task handler
-  const handleSubmitTask = (e) => {
+  const handleSubmitTask = async (e) => {
     e.preventDefault();
     if (!submittingTask) return;
 
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === submittingTask.id
-          ? {
-            ...t,
-            status: "Submitted",
-            submissionUrl: submissionForm.repoUrl,
-            demoUrl: submissionForm.demoUrl,
-            mentorFeedback: "Submitted! Awaiting review from Amit Sharma.",
-          }
-          : t
-      )
-    );
+    setActionLoading(true);
+    const res = await submitTask(submittingTask.id, {
+      repoUrl: submissionForm.repoUrl,
+      demoUrl: submissionForm.demoUrl,
+      notes: submissionForm.notes,
+    });
+    setActionLoading(false);
 
-    setSubmittingTask(null);
-    setSubmissionForm({ repoUrl: "", demoUrl: "", notes: "" });
+    if (res.success) {
+      setSubmittingTask(null);
+      setSubmissionForm({ repoUrl: "", demoUrl: "", notes: "" });
+      setNotification({
+        type: "success",
+        message: "Deliverables submitted successfully! Your mentor has been notified.",
+      });
+      setTimeout(() => setNotification(null), 3500);
+    } else {
+      alert(res.error || "Failed to submit assignment");
+    }
   };
 
   return (
@@ -338,25 +292,7 @@ const MenteeDashboard = () => {
                     </span>
                   </div>
 
-                  <div className="py-1">
-                    <p className="px-4 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      Switch Role (Testing)
-                    </p>
-                    <button
-                      onClick={() => switchRole("admin")}
-                      className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
-                    >
-                      <span className="w-2 h-2 rounded-full bg-blue-500" />
-                      <span>Admin Dashboard</span>
-                    </button>
-                    <button
-                      onClick={() => switchRole("mentor")}
-                      className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
-                    >
-                      <span className="w-2 h-2 rounded-full bg-indigo-500" />
-                      <span>Mentor Dashboard</span>
-                    </button>
-                  </div>
+
 
                   <div className="border-t border-slate-100 dark:border-slate-700 pt-1">
                     <button
@@ -374,6 +310,39 @@ const MenteeDashboard = () => {
             </div>
           </div>
         </div>
+
+        {/* Notification Toast */}
+        {notification && (
+          <div className="mb-5 p-3.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 rounded-xl text-sm flex items-center justify-between shadow-xs animate-fadeIn">
+            <div className="flex items-center gap-2.5">
+              <svg className="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="font-medium">{notification.message}</span>
+            </div>
+            <button onClick={() => setNotification(null)} className="text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-200 text-lg font-bold cursor-pointer leading-none">&times;</button>
+          </div>
+        )}
+
+        {/* Global Error Banner */}
+        {tasksError && (
+          <div className="mb-5 p-3.5 bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-300 rounded-xl text-sm flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <svg className="w-5 h-5 text-rose-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="font-medium">{tasksError}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Loading Indicator */}
+        {tasksLoading && (
+          <div className="mb-5 p-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-xl text-sm flex items-center gap-3">
+            <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+            <span className="font-medium">Loading your assignments and feedback...</span>
+          </div>
+        )}
 
         {/* Page Title & Subtitle */}
         <div className="mb-6">
@@ -424,7 +393,7 @@ const MenteeDashboard = () => {
             </div>
             <div>
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Attendance</p>
-              <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">98.5%</h2>
+              <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">{menteeUser.attendance || "100%"}</h2>
             </div>
           </div>
 
@@ -437,7 +406,7 @@ const MenteeDashboard = () => {
             </div>
             <div>
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Mentor Rating</p>
-              <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">94 / 100</h2>
+              <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">{avgScore !== null ? `${avgScore} / 100` : "N/A"}</h2>
             </div>
           </div>
         </div>
@@ -667,6 +636,14 @@ const MenteeDashboard = () => {
                   </div>
                 </div>
               ))}
+
+              {filteredTasks.length === 0 && (
+                <div className="col-span-full py-12 text-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-8">
+                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                    No tasks found in the database.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -685,7 +662,7 @@ const MenteeDashboard = () => {
 
                 <div className="flex items-center gap-2">
                   <div className="px-3 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-500/20 border border-emerald-200 dark:border-emerald-500/30 text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                    Average Score: 94 / 100
+                    {avgScore !== null ? `Average Score: ${avgScore} / 100` : "No ratings yet"}
                   </div>
                 </div>
               </div>
@@ -724,7 +701,7 @@ const MenteeDashboard = () => {
                     <div className="mt-4 p-4 rounded-lg bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700">
                       <div className="flex items-center gap-2 mb-2">
                         <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-[10px]">
-                          AS
+                          {getInitials(menteeUser.mentor)}
                         </div>
                         <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
                           {menteeUser.mentor} (Lead Mentor)
@@ -733,7 +710,7 @@ const MenteeDashboard = () => {
                       </div>
 
                       <p className="text-xs text-slate-700 dark:text-slate-200 italic leading-relaxed">
-                        "{task.mentorFeedback || "No feedback written yet."}"
+                        "{task.mentorFeedback || task.feedback || "No feedback written yet."}"
                       </p>
                     </div>
 
@@ -753,6 +730,14 @@ const MenteeDashboard = () => {
                     </div>
                   </div>
                 ))}
+
+                {feedbackTasks.length === 0 && (
+                  <div className="py-12 text-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-8">
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                      No reviewed assignments or feedback available in the database yet.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -827,9 +812,10 @@ const MenteeDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer flex items-center gap-2"
                 >
-                  Submit for Review
+                  {actionLoading ? "Submitting..." : "Submit for Review"}
                 </button>
               </div>
             </form>

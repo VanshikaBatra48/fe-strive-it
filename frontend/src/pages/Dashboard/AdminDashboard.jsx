@@ -1,181 +1,8 @@
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../../components/ThemeToggle";
-
-// Initial data matching the image: 5 Mentors and 12 Mentees
-const initialUsers = [
-  // Mentors (Total: 5)
-  {
-    id: 1,
-    name: "Amit Sharma",
-    email: "amit@example.com",
-    role: "mentor",
-    joinedOn: "Apr 12, 2025",
-    status: "Active",
-    avatarBg: "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300",
-  },
-  {
-    id: 2,
-    name: "Priya Singh",
-    email: "priya@example.com",
-    role: "mentor",
-    joinedOn: "Apr 10, 2025",
-    status: "Active",
-    avatarBg: "bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300",
-  },
-  {
-    id: 3,
-    name: "Rahul Kumar",
-    email: "rahul@example.com",
-    role: "mentor",
-    joinedOn: "Apr 8, 2025",
-    status: "Active",
-    avatarBg: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/50 dark:text-fuchsia-300",
-  },
-  {
-    id: 4,
-    name: "Neha Sharma",
-    email: "neha@example.com",
-    role: "mentor",
-    joinedOn: "Apr 5, 2025",
-    status: "Active",
-    avatarBg: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
-  },
-  {
-    id: 5,
-    name: "Vikram Iyer",
-    email: "vikram@example.com",
-    role: "mentor",
-    joinedOn: "Apr 2, 2025",
-    status: "Inactive",
-    avatarBg: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300",
-  },
-
-  // Mentees (Total: 12)
-  {
-    id: 6,
-    name: "Anjali Rao",
-    email: "anjali@example.com",
-    role: "mentee",
-    mentor: "Amit Sharma",
-    joinedOn: "Apr 15, 2025",
-    status: "Active",
-    avatarBg: "bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300",
-  },
-  {
-    id: 7,
-    name: "Sahil Khan",
-    email: "sahil@example.com",
-    role: "mentee",
-    mentor: "Priya Singh",
-    joinedOn: "Apr 14, 2025",
-    status: "Active",
-    avatarBg: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
-  },
-  {
-    id: 8,
-    name: "Pooja Desai",
-    email: "pooja@example.com",
-    role: "mentee",
-    mentor: "Rahul Kumar",
-    joinedOn: "Apr 12, 2025",
-    status: "Active",
-    avatarBg: "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300",
-  },
-  {
-    id: 9,
-    name: "Rohit Sharma",
-    email: "rohit@example.com",
-    role: "mentee",
-    mentor: "Neha Sharma",
-    joinedOn: "Apr 10, 2025",
-    status: "Inactive",
-    avatarBg: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300",
-  },
-  {
-    id: 10,
-    name: "Kavya Tiwari",
-    email: "kavya@example.com",
-    role: "mentee",
-    mentor: "Vikram Iyer",
-    joinedOn: "Apr 8, 2025",
-    status: "Active",
-    avatarBg: "bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300",
-  },
-  {
-    id: 11,
-    name: "Dev Patel",
-    email: "dev@example.com",
-    role: "mentee",
-    mentor: "Amit Sharma",
-    joinedOn: "Apr 6, 2025",
-    status: "Active",
-    avatarBg: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300",
-  },
-  {
-    id: 12,
-    name: "Sneha Gupta",
-    email: "sneha@example.com",
-    role: "mentee",
-    mentor: "Priya Singh",
-    joinedOn: "Apr 4, 2025",
-    status: "Active",
-    avatarBg: "bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300",
-  },
-  {
-    id: 13,
-    name: "Arjun Verma",
-    email: "arjun@example.com",
-    role: "mentee",
-    mentor: "Rahul Kumar",
-    joinedOn: "Apr 3, 2025",
-    status: "Active",
-    avatarBg: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300",
-  },
-  {
-    id: 14,
-    name: "Ritu Sen",
-    email: "ritu@example.com",
-    role: "mentee",
-    mentor: "Neha Sharma",
-    joinedOn: "Apr 1, 2025",
-    status: "Active",
-    avatarBg: "bg-lime-100 text-lime-700 dark:bg-lime-900/50 dark:text-lime-300",
-  },
-  {
-    id: 15,
-    name: "Manish Joshi",
-    email: "manish@example.com",
-    role: "mentee",
-    mentor: "Vikram Iyer",
-    joinedOn: "Mar 29, 2025",
-    status: "Active",
-    avatarBg: "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300",
-  },
-  {
-    id: 16,
-    name: "Tanvi Jain",
-    email: "tanvi@example.com",
-    role: "mentee",
-    mentor: "Amit Sharma",
-    joinedOn: "Mar 27, 2025",
-    status: "Active",
-    avatarBg: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
-  },
-  {
-    id: 17,
-    name: "Karan Malhotra",
-    email: "karan@example.com",
-    role: "mentee",
-    mentor: "Priya Singh",
-    joinedOn: "Mar 25, 2025",
-    status: "Active",
-    avatarBg: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300",
-  },
-].map((u) => ({
-  ...u,
-  password: u.role === "mentor" ? "Mentor@123" : "Mentee@123",
-}));
+import useAuth from "../../hooks/useAuth";
+import useUsers from "../../hooks/useUsers";
 
 // Helper to get 2-letter initials
 function getInitials(name = "") {
@@ -189,23 +16,27 @@ function getInitials(name = "") {
 function AdminDashboard() {
   const navigate = useNavigate();
   const mainRef = useRef(null);
-  const [users, setUsers] = useState(initialUsers);
+  const { user: currentUser, logout } = useAuth();
+  const {
+    users,
+    loading,
+    error,
+    createUser,
+    updateUser,
+    deleteUser,
+    refetch,
+  } = useUsers();
+
   const [activeTab, setActiveTab] = useState("dashboard"); // "dashboard", "mentors", "mentees"
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [modalError, setModalError] = useState("");
+  const [notification, setNotification] = useState(null);
 
-  // Switch role handler for testing
-  const switchRole = (newRole) => {
-    const userObj = {
-      role: newRole,
-      email: `${newRole}@example.com`,
-      name: newRole === "admin" ? "Administrator" : newRole === "mentor" ? "Amit Sharma" : "Anjali Rao",
-    };
-    localStorage.setItem("user", JSON.stringify(userObj));
-    window.location.reload();
-  };
+
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
+    logout();
     navigate("/");
   };
 
@@ -225,8 +56,30 @@ function AdminDashboard() {
     password: "",
     mentor: "",
     status: "Active",
+    assignedMentees: [],
   });
   const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [menteeDropdownOpen, setMenteeDropdownOpen] = useState(false);
+  const [menteeSearchQuery, setMenteeSearchQuery] = useState("");
+  const menteeDropdownRef = useRef(null);
+
+  // Close mentee multi-select dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        menteeDropdownRef.current &&
+        !menteeDropdownRef.current.contains(event.target)
+      ) {
+        setMenteeDropdownOpen(false);
+      }
+    }
+    if (menteeDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [menteeDropdownOpen]);
 
   // View & Edit Modal states
   const [viewingUser, setViewingUser] = useState(null);
@@ -270,6 +123,61 @@ function AdminDashboard() {
     });
   }, [mentees, menteeSearch, menteeFilter]);
 
+  // Filtered and sorted mentees inside the assign-mentees dropdown (first unassigned, then assigned)
+  const availableMenteesForAssign = useMemo(() => {
+    let list = mentees;
+    if (menteeSearchQuery.trim()) {
+      const q = menteeSearchQuery.toLowerCase();
+      list = list.filter(
+        (m) =>
+          m.name?.toLowerCase().includes(q) ||
+          m.email?.toLowerCase().includes(q)
+      );
+    }
+    return [...list].sort((a, b) => {
+      const aAssigned = Boolean(a.mentor && a.mentor.trim());
+      const bAssigned = Boolean(b.mentor && b.mentor.trim());
+      if (aAssigned !== bAssigned) {
+        return aAssigned ? 1 : -1; // unassigned comes first
+      }
+      return (a.name || "").localeCompare(b.name || "");
+    });
+  }, [mentees, menteeSearchQuery]);
+
+  const toggleMenteeSelection = (menteeId) => {
+    setFormData((prev) => {
+      const current = prev.assignedMentees || [];
+      const exists = current.includes(menteeId);
+      return {
+        ...prev,
+        assignedMentees: exists
+          ? current.filter((id) => id !== menteeId)
+          : [...current, menteeId],
+      };
+    });
+  };
+
+  const removeAssignedMentee = (menteeId) => {
+    setFormData((prev) => ({
+      ...prev,
+      assignedMentees: (prev.assignedMentees || []).filter((id) => id !== menteeId),
+    }));
+  };
+
+  const selectAllMentees = () => {
+    setFormData((prev) => ({
+      ...prev,
+      assignedMentees: mentees.map((m) => m.id),
+    }));
+  };
+
+  const clearAllAssignedMentees = () => {
+    setFormData((prev) => ({
+      ...prev,
+      assignedMentees: [],
+    }));
+  };
+
   // Handlers
   function openCreate(role) {
     setCreateRole(role);
@@ -279,60 +187,88 @@ function AdminDashboard() {
       password: "",
       mentor: mentors[0]?.name || "",
       status: "Active",
+      assignedMentees: [],
     });
+    setMenteeDropdownOpen(false);
+    setMenteeSearchQuery("");
+    setModalError("");
     setShowCreatePassword(false);
     setShowCreateModal(true);
   }
 
-  function handleCreateSubmit(e) {
+  async function handleCreateSubmit(e) {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim()) return;
+    if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim()) {
+      setModalError("Please provide name, email, and password.");
+      return;
+    }
 
-    const colors = [
-      "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300",
-      "bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300",
-      "bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300",
-      "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
-      "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300",
-      "bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300",
-      "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
-    ];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
-
-    const newUser = {
-      id: Date.now(),
+    setModalError("");
+    setActionLoading(true);
+    const res = await createUser({
       name: formData.name.trim(),
       email: formData.email.trim(),
       password: formData.password.trim(),
       role: createRole,
       status: formData.status || "Active",
-      joinedOn: new Date().toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-      avatarBg: randomColor,
-      ...(createRole === "mentee" && {
-        mentor: formData.mentor || mentors[0]?.name || "Unassigned",
-      }),
-    };
+      mentor: createRole === "mentee" ? (formData.mentor ? formData.mentor.trim() : null) : null,
+      assignedMentees: createRole === "mentor" ? (formData.assignedMentees || []) : [],
+    });
+    setActionLoading(false);
 
-    setUsers((prev) => [newUser, ...prev]);
-    setShowCreateModal(false);
+    if (res.success) {
+      setShowCreateModal(false);
+      setNotification({
+        type: "success",
+        message: `${createRole === "mentor" ? "Mentor" : "Mentee"} created successfully!`,
+      });
+      setTimeout(() => setNotification(null), 3500);
+    } else {
+      setModalError(res.error || "Failed to create user");
+    }
   }
 
-  function handleUpdateSubmit(e) {
+  async function handleUpdateSubmit(e) {
     e.preventDefault();
     if (!editingUser) return;
-    setUsers((prev) =>
-      prev.map((u) => (u.id === editingUser.id ? editingUser : u))
-    );
-    setEditingUser(null);
+    setModalError("");
+    setActionLoading(true);
+    const res = await updateUser(editingUser.id, {
+      name: editingUser.name,
+      email: editingUser.email,
+      password: editingUser.password,
+      status: editingUser.status,
+      role: editingUser.role,
+      mentor: editingUser.role === "mentee" ? (editingUser.mentor ? editingUser.mentor.trim() : null) : null,
+    });
+    setActionLoading(false);
+
+    if (res.success) {
+      setEditingUser(null);
+      setNotification({
+        type: "success",
+        message: "User updated successfully!",
+      });
+      setTimeout(() => setNotification(null), 3500);
+    } else {
+      setModalError(res.error || "Failed to update user");
+    }
   }
 
-  function handleDelete(id, name) {
+  async function handleDelete(id, name) {
     if (window.confirm(`Are you sure you want to delete ${name}?`)) {
-      setUsers((prev) => prev.filter((u) => u.id !== id));
+      setActionLoading(true);
+      const res = await deleteUser(id);
+      setActionLoading(false);
+      if (res.success) {
+        setNotification({
+          type: "success",
+          message: `${name} deleted successfully!`,
+        });
+        setTimeout(() => setNotification(null), 3500);
+      } else {
+        alert(res.error || "Failed to delete user");
+      }
     }
   }
 
@@ -419,11 +355,11 @@ function AdminDashboard() {
         <div className="p-4 border-t border-slate-800 bg-[#111827] flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-slate-700 text-slate-200 flex items-center justify-center font-bold text-sm flex-shrink-0">
-              AD
+              {getInitials(currentUser?.name || "Admin")}
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-white truncate">Administrator</p>
-              <p className="text-[11px] text-slate-400 truncate">admin@tms.com</p>
+              <p className="text-xs font-semibold text-white truncate">{currentUser?.name || "Administrator"}</p>
+              <p className="text-[11px] text-slate-400 truncate">{currentUser?.email || "admin@example.com"}</p>
             </div>
           </div>
         </div>
@@ -442,10 +378,10 @@ function AdminDashboard() {
               className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               <div className="w-8 h-8 rounded-full bg-slate-800 dark:bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                AD
+                {getInitials(currentUser?.name || "Admin")}
               </div>
               <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                Admin
+                {currentUser?.name?.split(" ")[0] || "Admin"}
               </span>
               <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
@@ -456,32 +392,14 @@ function AdminDashboard() {
             {showProfileMenu && (
               <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-2 z-50">
                 <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-700">
-                  <p className="text-xs font-semibold text-slate-900 dark:text-white">Administrator</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">admin@tms.com</p>
+                  <p className="text-xs font-semibold text-slate-900 dark:text-white">{currentUser?.name || "Administrator"}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">{currentUser?.email || "admin@example.com"}</p>
                   <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
-                    Super Admin
+                    Administrator
                   </span>
                 </div>
 
-                <div className="py-1">
-                  <p className="px-4 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    Switch Role (Testing)
-                  </p>
-                  <button
-                    onClick={() => switchRole("mentor")}
-                    className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-indigo-500" />
-                    <span>Mentor Dashboard</span>
-                  </button>
-                  <button
-                    onClick={() => switchRole("mentee")}
-                    className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span>Mentee Dashboard</span>
-                  </button>
-                </div>
+
 
                 <div className="border-t border-slate-100 dark:border-slate-700 pt-1">
                   <button
@@ -498,6 +416,40 @@ function AdminDashboard() {
             )}
           </div>
         </div>
+
+        {/* Notification Toast */}
+        {notification && (
+          <div className="mb-5 p-3.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 rounded-xl text-sm flex items-center justify-between shadow-xs animate-fadeIn">
+            <div className="flex items-center gap-2.5">
+              <svg className="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="font-medium">{notification.message}</span>
+            </div>
+            <button onClick={() => setNotification(null)} className="text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-200 text-lg font-bold cursor-pointer leading-none">&times;</button>
+          </div>
+        )}
+
+        {/* Global Error Banner */}
+        {error && (
+          <div className="mb-5 p-3.5 bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-300 rounded-xl text-sm flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <svg className="w-5 h-5 text-rose-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="font-medium">{error}</span>
+            </div>
+            <button onClick={() => refetch()} className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-semibold cursor-pointer">Retry</button>
+          </div>
+        )}
+
+        {/* Loading Indicator */}
+        {loading && users.length === 0 && (
+          <div className="mb-5 p-3.5 bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-300 rounded-xl text-sm flex items-center gap-3">
+            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+            <span className="font-medium">Fetching users from backend...</span>
+          </div>
+        )}
 
         {/* Page Title & Subtitle */}
         <div className="mb-6">
@@ -931,7 +883,16 @@ function AdminDashboard() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 dark:text-slate-200 font-medium">
-                      {mentee.mentor || "Not assigned"}
+                      {mentee.mentor && mentors.some((m) => m.name.toLowerCase() === mentee.mentor.toLowerCase()) ? (
+                        <span className="inline-flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
+                          <span className="w-2 h-2 rounded-full bg-blue-500" />
+                          {mentee.mentor}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700">
+                          Not assigned
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
                       {mentee.joinedOn}
@@ -1006,8 +967,8 @@ function AdminDashboard() {
       {/* CREATE MODAL */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md overflow-hidden text-slate-800 dark:text-slate-100">
-            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden text-slate-800 dark:text-slate-100">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
                   Create New {createRole === "mentor" ? "Mentor" : "Mentee"}
@@ -1024,7 +985,16 @@ function AdminDashboard() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleCreateSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
+              {modalError && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 rounded-lg text-xs font-medium flex items-center gap-2">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span>{modalError}</span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                   Full Name
@@ -1104,18 +1074,214 @@ function AdminDashboard() {
                     Assign Mentor
                   </label>
                   <select
-                    value={formData.mentor}
+                    value={formData.mentor || ""}
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, mentor: e.target.value }))
                     }
                     className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
                   >
+                    <option value="">Unassigned (No Mentor)</option>
                     {mentors.map((m) => (
                       <option key={m.id} value={m.name}>
                         {m.name}
                       </option>
                     ))}
                   </select>
+                </div>
+              )}
+
+              {/* Assign Mentees (Multi-Select Dropdown) - ONLY for creating new Mentor */}
+              {createRole === "mentor" && (
+                <div ref={menteeDropdownRef} className="relative">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                      Assign Mentees
+                    </label>
+                    <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                      {formData.assignedMentees?.length || 0} selected
+                    </span>
+                  </div>
+
+                  {/* Dropdown trigger button */}
+                  <button
+                    type="button"
+                    onClick={() => setMenteeDropdownOpen((prev) => !prev)}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-left bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer flex items-center justify-between transition-colors shadow-2xs"
+                  >
+                    <span
+                      className={
+                        formData.assignedMentees?.length > 0
+                          ? "text-slate-800 dark:text-white font-medium"
+                          : "text-slate-400 dark:text-slate-500"
+                      }
+                    >
+                      {formData.assignedMentees?.length > 0
+                        ? `${formData.assignedMentees.length} mentee${formData.assignedMentees.length > 1 ? "s" : ""} selected`
+                        : "Select mentees to assign..."}
+                    </span>
+                    <svg
+                      className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+                        menteeDropdownOpen ? "rotate-180" : ""
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Selected Mentees Pills/Chips */}
+                  {formData.assignedMentees?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2 max-h-24 overflow-y-auto p-1 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
+                      {formData.assignedMentees.map((menteeId) => {
+                        const m = mentees.find((item) => item.id === menteeId);
+                        if (!m) return null;
+                        return (
+                          <span
+                            key={m.id}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-500/30 shadow-2xs"
+                          >
+                            <span>{m.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeAssignedMentee(m.id)}
+                              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-200 ml-0.5 cursor-pointer focus:outline-none"
+                              title="Remove mentee"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Dropdown Menu */}
+                  {menteeDropdownOpen && (
+                    <div className="absolute left-0 right-0 z-50 mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                      {/* Search box & Quick actions */}
+                      <div className="p-2.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 space-y-2">
+                        <div className="relative">
+                          <svg
+                            className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                          <input
+                            type="text"
+                            placeholder="Search mentee by name or email..."
+                            value={menteeSearchQuery}
+                            onChange={(e) => setMenteeSearchQuery(e.target.value)}
+                            className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            autoFocus
+                          />
+                        </div>
+
+                        {mentees.length > 0 && (
+                          <div className="flex items-center justify-between text-xs px-0.5">
+                            <span className="text-slate-500 dark:text-slate-400">
+                              {formData.assignedMentees?.length || 0} of {mentees.length} selected
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={selectAllMentees}
+                                className="text-blue-600 dark:text-blue-400 hover:underline font-medium cursor-pointer"
+                              >
+                                Select All
+                              </button>
+                              <span className="text-slate-300 dark:text-slate-600">|</span>
+                              <button
+                                type="button"
+                                onClick={clearAllAssignedMentees}
+                                className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
+                              >
+                                Clear All
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Mentee List */}
+                      <div className="max-h-52 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                        {mentees.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-slate-500 dark:text-slate-400">
+                            No mentees registered in the system yet.
+                          </div>
+                        ) : availableMenteesForAssign.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-slate-500 dark:text-slate-400">
+                            No mentees matching &quot;{menteeSearchQuery}&quot;
+                          </div>
+                        ) : (
+                          availableMenteesForAssign.map((m, idx) => {
+                            const isSelected = (formData.assignedMentees || []).includes(m.id);
+                            const isAssigned = Boolean(m.mentor?.trim());
+                            const prevWasUnassigned =
+                              idx > 0 &&
+                              !availableMenteesForAssign[idx - 1].mentor?.trim();
+                            const showAssignedHeader = isAssigned && (idx === 0 || prevWasUnassigned);
+                            const showUnassignedHeader = !isAssigned && idx === 0;
+
+                            return (
+                              <div key={m.id}>
+                                {showUnassignedHeader && (
+                                  <div className="px-3 py-1.5 bg-slate-100/90 dark:bg-slate-800 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider sticky top-0 z-10 border-b border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between">
+                                    <span>Unassigned Mentees</span>
+                                    <span className="text-[10px] lowercase font-normal opacity-80">(Available)</span>
+                                  </div>
+                                )}
+                                {showAssignedHeader && (
+                                  <div className="px-3 py-1.5 bg-slate-100/90 dark:bg-slate-800 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider sticky top-0 z-10 border-b border-slate-200/60 dark:border-slate-700/60">
+                                    Currently Assigned Mentees
+                                  </div>
+                                )}
+                                <label
+                                  className={`w-full px-3 py-2.5 flex items-center gap-3 cursor-pointer select-none transition-colors ${
+                                    isSelected
+                                      ? "bg-blue-50/70 dark:bg-blue-900/20"
+                                      : "hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleMenteeSelection(m.id)}
+                                    className="w-4 h-4 text-blue-600 rounded border-slate-300 dark:border-slate-600 focus:ring-blue-500 dark:bg-slate-800 cursor-pointer"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="text-xs font-semibold text-slate-800 dark:text-white truncate">
+                                        {m.name}
+                                      </p>
+                                      <span
+                                        className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                                          m.mentor
+                                            ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                                            : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                        }`}
+                                      >
+                                        {m.mentor ? `Mentor: ${m.mentor}` : "Unassigned"}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                                      {m.email}
+                                    </p>
+                                  </div>
+                                </label>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1145,9 +1311,17 @@ function AdminDashboard() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-xs transition-colors cursor-pointer"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium shadow-xs transition-colors cursor-pointer flex items-center gap-2"
                 >
-                  Create {createRole === "mentor" ? "Mentor" : "Mentee"}
+                  {actionLoading ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Creating...</span>
+                    </>
+                  ) : (
+                    <span>Create {createRole === "mentor" ? "Mentor" : "Mentee"}</span>
+                  )}
                 </button>
               </div>
             </form>
@@ -1196,11 +1370,13 @@ function AdminDashboard() {
                     {viewingUser.role}
                   </span>
                 </div>
-                {viewingUser.mentor && (
+                {viewingUser.role === "mentee" && (
                   <div className="flex justify-between">
                     <span className="text-slate-500 dark:text-slate-400">Assigned Mentor:</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {viewingUser.mentor}
+                      {viewingUser.mentor && mentors.some((m) => m.name.toLowerCase() === viewingUser.mentor.toLowerCase())
+                        ? viewingUser.mentor
+                        : "Not assigned"}
                     </span>
                   </div>
                 )}
@@ -1210,7 +1386,7 @@ function AdminDashboard() {
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-xs font-semibold px-2 py-1 rounded bg-slate-200/70 dark:bg-slate-800 text-slate-800 dark:text-slate-200 tracking-wider">
                       {showViewPassword
-                        ? viewingUser.password || "Password@123"
+                        ? viewingUser.password || (viewingUser.role === "mentor" ? "Mentor@123" : "Mentee@123")
                         : "••••••••"}
                     </span>
                     <button
@@ -1233,7 +1409,7 @@ function AdminDashboard() {
                     <button
                       type="button"
                       onClick={() => {
-                        navigator.clipboard.writeText(viewingUser.password || "Password@123");
+                        navigator.clipboard.writeText(viewingUser.password || (viewingUser.role === "mentor" ? "Mentor@123" : "Mentee@123"));
                         setCopiedPassword(true);
                         setTimeout(() => setCopiedPassword(false), 2000);
                       }}
@@ -1300,6 +1476,15 @@ function AdminDashboard() {
             </div>
 
             <form onSubmit={handleUpdateSubmit} className="p-6 space-y-4">
+              {modalError && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 rounded-lg text-xs font-medium flex items-center gap-2">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span>{modalError}</span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                   Full Name
@@ -1373,10 +1558,11 @@ function AdminDashboard() {
                   <select
                     value={editingUser.mentor || ""}
                     onChange={(e) =>
-                      setEditingUser((prev) => ({ ...prev, mentor: e.target.value }))
+                      setEditingUser((prev) => ({ ...prev, mentor: e.target.value || "" }))
                     }
                     className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
                   >
+                    <option value="">Unassigned (No Mentor)</option>
                     {mentors.map((m) => (
                       <option key={m.id} value={m.name}>
                         {m.name}
@@ -1412,9 +1598,17 @@ function AdminDashboard() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow-xs transition-colors cursor-pointer"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium shadow-xs transition-colors cursor-pointer flex items-center gap-2"
                 >
-                  Save Changes
+                  {actionLoading ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save Changes</span>
+                  )}
                 </button>
               </div>
             </form>
