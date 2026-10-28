@@ -39,7 +39,9 @@ export const authApi = {
    */
   async completeFirstLogin(id) {
     const url = id ? `/users/${id}/complete-first-login` : '/users/complete-first-login';
+    console.log("url", url);
     const response = await apiClient.patch(url);
+    console.log("response", response);
     return response.data;
   },
 };

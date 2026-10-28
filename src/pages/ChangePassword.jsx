@@ -14,7 +14,7 @@ const ChangePassword = () => {
   const [submitting, setSubmitting] = useState(false);
   const [skipping, setSkipping] = useState(false);
   const [error, setError] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState(""); 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
