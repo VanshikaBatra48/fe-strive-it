@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import * as Yup from "yup";
 import { Formik, Form, Field, ErrorMessage } from "formik";
-import { useNavigate } from "react-router-dom";
+import { useNavigate , Link} from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 
 // High-resolution dedicated background images for Intern Management System
@@ -176,13 +176,12 @@ const Login = () => {
                                     >
                                         Password
                                     </label>
-                                    <a
-                                        href="#forgot"
-                                        onClick={(e) => e.preventDefault()}
-                                        className="text-xs font-medium text-blue-300 hover:text-blue-200 hover:underline transition-colors"
-                                    >
-                                        Forgot password?
-                                    </a>
+                                    <Link
+                                        to="/forgot-password"
+                                         className="text-xs font-medium text-blue-300 hover:text-blue-200 hover:underline transition-colors"
+                                        >
+                                         Forgot password?
+                                    </Link>
                                 </div>
                                 <div className="relative">
                                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-300">
@@ -257,19 +256,6 @@ const Login = () => {
                                 />
                             </div>
 
-                            {/* Remember Me */}
-                            <div className="flex items-center">
-                                <label className="flex items-center gap-2 cursor-pointer select-none">
-                                    <Field
-                                        type="checkbox"
-                                        name="rememberMe"
-                                        className="w-4 h-4 text-blue-600 bg-white/10 border-white/30 rounded focus:ring-blue-500 cursor-pointer"
-                                    />
-                                    <span className="text-xs text-slate-200 font-medium">
-                                        Keep me signed in
-                                    </span>
-                                </label>
-                            </div>
 
                             {/* Submit Button */}
                             <button

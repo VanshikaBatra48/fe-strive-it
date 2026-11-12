@@ -5,14 +5,14 @@ import ThemeToggle from "../components/ThemeToggle";
 
 const ChangePassword = () => {
   const navigate = useNavigate();
-  const { user, changePassword, completeFirstLogin, logout } = useAuth();
+  const { user, changePassword, logout } = useAuth();
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [skipping, setSkipping] = useState(false);
+  //const [skipping, setSkipping] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState(""); 
 
@@ -45,19 +45,7 @@ const ChangePassword = () => {
     }
   };
 
-  const handleSkip = async () => {
-    setError("");
-    setSkipping(true);
-    const res = await completeFirstLogin();
-    setSkipping(false);
-
-    if (res.success) {
-      navigate("/dashboard", { replace: true });
-    } else {
-      // Even if the network call had an issue, fallback to dashboard
-      navigate("/dashboard", { replace: true });
-    }
-  };
+ 
 
   const handleLogout = () => {
     logout();
@@ -236,7 +224,7 @@ const ChangePassword = () => {
           <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
             <button
               type="submit"
-              disabled={submitting || skipping}
+              disabled={submitting }
               className="w-full sm:flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-sm font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
             >
               {submitting ? (
@@ -246,22 +234,6 @@ const ChangePassword = () => {
                 </>
               ) : (
                 <span>Update Password</span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleSkip}
-              disabled={submitting || skipping}
-              className="w-full sm:w-auto py-2.5 px-4 border border-slate-700 hover:bg-slate-700/60 text-slate-300 hover:text-white rounded-lg text-sm font-medium transition-colors cursor-pointer flex items-center justify-center gap-2"
-            >
-              {skipping ? (
-                <>
-                  <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-transparent rounded-full animate-spin" />
-                  <span>Skipping...</span>
-                </>
-              ) : (
-                <span>Skip for now</span>
               )}
             </button>
           </div>
