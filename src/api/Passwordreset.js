@@ -1,5 +1,6 @@
-// Change these to match your backend routes.
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
+import { getApiBaseUrl } from './axios';
+
+const BASE_URL = getApiBaseUrl();
 
 const ENDPOINTS = {
   request: `${BASE_URL}/forgot-password`,

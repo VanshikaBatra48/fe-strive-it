@@ -3,11 +3,16 @@ import apiClient from './axios';
 export const taskApi = {
   /**
    * Fetch all tasks with optional filters from backend database
-   * @param {object} filters { menteeEmail, mentorEmail, menteeName, mentorName, status, priority }
+   * @param {object} filters { mentee_id, assigned_by, status, priority, category, search, page, limit }
    * @returns {Promise<Array>}
    */
   async getTasks(filters = {}) {
-    const response = await apiClient.get('/tasks', { params: filters });
+    const cleanFilters = Object.fromEntries(
+      Object.entries(filters).filter(([, v]) => v !== '' && v !== undefined && v !== null)
+    );
+    const response = await apiClient.get('/tasks', {
+      params: { limit: 100, ...cleanFilters },
+    });
     return response.data?.data || [];
   },
 
@@ -43,9 +48,20 @@ export const taskApi = {
   },
 
   /**
+   * Update task status (Mentee for own task, Mentor/Admin for managed task)
+   * @param {number|string} id
+   * @param {'in-progress'|'submitted'|'needs-revision'|'complete'|'hold'} status
+   * @returns {Promise<object>}
+   */
+  async updateTaskStatus(id, status) {
+    const response = await apiClient.patch(`/tasks/${id}/status`, { status });
+    return response.data?.data;
+  },
+
+  /**
    * Submit task assignment deliverables (Mentee action)
    * @param {number|string} id
-   * @param {object} submissionData { repoUrl, demoUrl, notes }
+   * @param {object} submissionData { submission_url, demo_url, submission_notes }
    * @returns {Promise<object>}
    */
   async submitTask(id, submissionData) {

@@ -6,11 +6,13 @@ import useUsers from "../../hooks/useUsers";
 
 // Helper to get 2-letter initials
 function getInitials(name = "") {
-  const parts = name.trim().split(" ");
+  const normalized = typeof name === "string" ? name.trim() : "";
+  if (!normalized) return "?";
+  const parts = normalized.split(/\s+/).filter(Boolean);
   if (parts.length >= 2) {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
-  return name.slice(0, 2).toUpperCase();
+  return normalized.slice(0, 2).toUpperCase();
 }
 
 function AdminDashboard() {
@@ -23,6 +25,7 @@ function AdminDashboard() {
     error,
     createUser,
     updateUser,
+    assignMentorToMentee,
     deleteUser,
     refetch,
   } = useUsers();
@@ -53,12 +56,10 @@ function AdminDashboard() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    password: "",
     mentor: "",
     status: "Active",
     assignedMentees: [],
   });
-  const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [menteeDropdownOpen, setMenteeDropdownOpen] = useState(false);
   const [menteeSearchQuery, setMenteeSearchQuery] = useState("");
   const menteeDropdownRef = useRef(null);
@@ -81,12 +82,13 @@ function AdminDashboard() {
     };
   }, [menteeDropdownOpen]);
 
-  // View & Edit Modal states
+  // View, Edit & Assign Mentor Modal states
   const [viewingUser, setViewingUser] = useState(null);
-  const [showViewPassword, setShowViewPassword] = useState(false);
-  const [copiedPassword, setCopiedPassword] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
-  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [assigningMentee, setAssigningMentee] = useState(null);
+  const [selectedMentorId, setSelectedMentorId] = useState("");
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignError, setAssignError] = useState("");
 
   // Filter mentors & mentees
   const mentors = useMemo(
@@ -94,19 +96,43 @@ function AdminDashboard() {
     [users]
   );
 
+  const availableMentors = useMemo(
+    () => mentors.filter((m) => (m.status || "").toLowerCase() === "active"),
+    [mentors]
+  );
+
   const mentees = useMemo(
     () => users.filter((u) => u.role === "mentee"),
     [users]
   );
 
+  const resolveMenteeMentor = (mentee) => {
+    if (!mentee) return null;
+    if (mentee.mentorId) {
+      const byId = mentors.find((m) => m.id === mentee.mentorId);
+      if (byId) return byId;
+    }
+    if (mentee.mentorDetails?.id) {
+      return mentee.mentorDetails;
+    }
+    if (mentee.mentor) {
+      return (
+        mentors.find(
+          (m) => m.name?.toLowerCase() === mentee.mentor.toLowerCase()
+        ) || null
+      );
+    }
+    return null;
+  };
+
   // Search & Status filters for mentors
   const filteredMentors = useMemo(() => {
     return mentors.filter((m) => {
-      const matchesSearch = `${m.name} ${m.email}`
+      const matchesSearch = `${m.name || ""} ${m.email || ""}`
         .toLowerCase()
         .includes(mentorSearch.toLowerCase());
       const matchesFilter =
-        mentorFilter === "All" || m.status.toLowerCase() === mentorFilter.toLowerCase();
+        mentorFilter === "All" || (m.status || "").toLowerCase() === mentorFilter.toLowerCase();
       return matchesSearch && matchesFilter;
     });
   }, [mentors, mentorSearch, mentorFilter]);
@@ -114,11 +140,11 @@ function AdminDashboard() {
   // Search & Status filters for mentees
   const filteredMentees = useMemo(() => {
     return mentees.filter((m) => {
-      const matchesSearch = `${m.name} ${m.email} ${m.mentor || ""}`
+      const matchesSearch = `${m.name || ""} ${m.email || ""} ${m.mentor || ""}`
         .toLowerCase()
         .includes(menteeSearch.toLowerCase());
       const matchesFilter =
-        menteeFilter === "All" || m.status.toLowerCase() === menteeFilter.toLowerCase();
+        menteeFilter === "All" || (m.status || "").toLowerCase() === menteeFilter.toLowerCase();
       return matchesSearch && matchesFilter;
     });
   }, [mentees, menteeSearch, menteeFilter]);
@@ -184,34 +210,43 @@ function AdminDashboard() {
     setFormData({
       name: "",
       email: "",
-      password: "",
-      mentor: mentors[0]?.name || "",
+      mentor: availableMentors[0]?.name || "",
       status: "Active",
       assignedMentees: [],
     });
     setMenteeDropdownOpen(false);
     setMenteeSearchQuery("");
     setModalError("");
-    setShowCreatePassword(false);
     setShowCreateModal(true);
   }
 
   async function handleCreateSubmit(e) {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim()) {
-      setModalError("Please provide name, email, and password.");
+    if (!formData.name.trim() || !formData.email.trim()) {
+      setModalError("Please provide name and email.");
       return;
     }
+
+    const selectedCreateMentor =
+      createRole === "mentee" && formData.mentor
+        ? mentors.find(
+            (m) => m.name?.toLowerCase() === formData.mentor.trim().toLowerCase()
+          ) || null
+        : null;
 
     setModalError("");
     setActionLoading(true);
     const res = await createUser({
       name: formData.name.trim(),
       email: formData.email.trim(),
-      password: formData.password.trim(),
       role: createRole,
       status: formData.status || "Active",
-      mentor: createRole === "mentee" ? (formData.mentor ? formData.mentor.trim() : null) : null,
+      ...(createRole === "mentee"
+        ? {
+            mentor_id: selectedCreateMentor ? selectedCreateMentor.id : null,
+            mentor: formData.mentor ? formData.mentor.trim() : null,
+          }
+        : { mentor: null }),
       assignedMentees: createRole === "mentor" ? (formData.assignedMentees || []) : [],
     });
     setActionLoading(false);
@@ -220,9 +255,11 @@ function AdminDashboard() {
       setShowCreateModal(false);
       setNotification({
         type: "success",
-        message: `${createRole === "mentor" ? "Mentor" : "Mentee"} created successfully!`,
+        message:
+          res.message ||
+          `${createRole === "mentor" ? "Mentor" : "Mentee"} created successfully!`,
       });
-      setTimeout(() => setNotification(null), 3500);
+      setTimeout(() => setNotification(null), 4000);
     } else {
       setModalError(res.error || "Failed to create user");
     }
@@ -231,15 +268,26 @@ function AdminDashboard() {
   async function handleUpdateSubmit(e) {
     e.preventDefault();
     if (!editingUser) return;
+    const selectedEditMentor =
+      editingUser.role === "mentee" && editingUser.mentor
+        ? mentors.find(
+            (m) => m.name?.toLowerCase() === editingUser.mentor.trim().toLowerCase()
+          ) || null
+        : null;
+
     setModalError("");
     setActionLoading(true);
     const res = await updateUser(editingUser.id, {
       name: editingUser.name,
       email: editingUser.email,
-      password: editingUser.password,
       status: editingUser.status,
       role: editingUser.role,
-      mentor: editingUser.role === "mentee" ? (editingUser.mentor ? editingUser.mentor.trim() : null) : null,
+      ...(editingUser.role === "mentee"
+        ? {
+            mentor_id: selectedEditMentor ? selectedEditMentor.id : null,
+            mentor: editingUser.mentor ? editingUser.mentor.trim() : null,
+          }
+        : { mentor: null }),
     });
     setActionLoading(false);
 
@@ -255,19 +303,93 @@ function AdminDashboard() {
     }
   }
 
+  function openAssignMentorModal(mentee) {
+    const currentMentor = resolveMenteeMentor(mentee);
+    setAssigningMentee(mentee);
+    setSelectedMentorId(currentMentor ? String(currentMentor.id) : "");
+    setAssignError("");
+  }
+
+  async function handleAssignMentorSubmit(e) {
+    e.preventDefault();
+    if (!assigningMentee) return;
+
+    if (!selectedMentorId) {
+      setAssignError("Please select an available mentor.");
+      return;
+    }
+
+    setAssignError("");
+    setAssignLoading(true);
+    const res = await assignMentorToMentee(assigningMentee.id, Number(selectedMentorId));
+    setAssignLoading(false);
+
+    if (res.success) {
+      const assignedMentor = mentors.find((m) => m.id === Number(selectedMentorId));
+      const targetName = assigningMentee.name;
+      setAssigningMentee(null);
+      setNotification({
+        type: "success",
+        message:
+          res.message ||
+          `Mentor ${assignedMentor?.name || ""} assigned to ${targetName} successfully!`,
+      });
+      setTimeout(() => setNotification(null), 4000);
+    } else {
+      setAssignError(res.error || "Failed to assign mentor.");
+    }
+  }
+
+  async function handleRemoveMentorAssignment() {
+    if (!assigningMentee) return;
+
+    setAssignError("");
+    setAssignLoading(true);
+    const res = await assignMentorToMentee(assigningMentee.id, null);
+    setAssignLoading(false);
+
+    if (res.success) {
+      const targetName = assigningMentee.name;
+      setAssigningMentee(null);
+      setNotification({
+        type: "success",
+        message:
+          res.message ||
+          `Mentor assignment removed from ${targetName} successfully!`,
+      });
+      setTimeout(() => setNotification(null), 4000);
+    } else {
+      setAssignError(res.error || "Failed to remove mentor assignment.");
+    }
+  }
+
   async function handleDelete(id, name) {
-    if (window.confirm(`Are you sure you want to delete ${name}?`)) {
+    const target = users.find((u) => u.id === Number(id));
+    const warning =
+      target?.role === "mentee"
+        ? `Are you sure you want to delete ${name}? All tasks assigned to this mentee will also be permanently deleted.`
+        : `Are you sure you want to delete ${name}?`;
+
+    if (window.confirm(warning)) {
       setActionLoading(true);
       const res = await deleteUser(id);
       setActionLoading(false);
       if (res.success) {
+        const extra =
+          res.deletedTasksCount > 0
+            ? ` (${res.deletedTasksCount} task${res.deletedTasksCount > 1 ? "s" : ""} removed)`
+            : "";
         setNotification({
           type: "success",
-          message: `${name} deleted successfully!`,
+          message: `${name} deleted successfully!${extra}`,
         });
         setTimeout(() => setNotification(null), 3500);
       } else {
-        alert(res.error || "Failed to delete user");
+        setNotification({
+          type: "error",
+          message: res.error || "Failed to delete user",
+        });
+        setTimeout(() => setNotification(null), 5000);
       }
     }
   }
@@ -419,14 +541,31 @@ function AdminDashboard() {
 
         {/* Notification Toast */}
         {notification && (
-          <div className="mb-5 p-3.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 rounded-xl text-sm flex items-center justify-between shadow-xs animate-fadeIn">
+          <div
+            className={`mb-5 p-3.5 rounded-xl text-sm flex items-center justify-between shadow-xs animate-fadeIn border ${
+              notification.type === "error"
+                ? "bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-300"
+                : "bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+            }`}
+          >
             <div className="flex items-center gap-2.5">
-              <svg className="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-              </svg>
+              {notification.type === "error" ? (
+                <svg className="w-5 h-5 text-rose-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
               <span className="font-medium">{notification.message}</span>
             </div>
-            <button onClick={() => setNotification(null)} className="text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-200 text-lg font-bold cursor-pointer leading-none">&times;</button>
+            <button
+              onClick={() => setNotification(null)}
+              className="hover:opacity-75 text-lg font-bold cursor-pointer leading-none"
+            >
+              &times;
+            </button>
           </div>
         )}
 
@@ -611,10 +750,9 @@ function AdminDashboard() {
                         type="button"
                         onClick={() => {
                           setViewingUser(mentor);
-                          setShowViewPassword(false);
                         }}
                         className="flex items-center gap-3 text-left group cursor-pointer focus:outline-none"
-                        title="Click to view mentor details & password"
+                        title="Click to view mentor details"
                       >
                         <div
                           className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 transition-transform group-hover:scale-105 shadow-2xs ${mentor.avatarBg}`}
@@ -650,13 +788,15 @@ function AdminDashboard() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap w-48 min-w-[190px]">
                       {(() => {
-                        const assignedMentees = mentees.filter(
-                          (m) => m.mentor?.toLowerCase() === mentor.name.toLowerCase()
+                        const assignedMentees = mentees.filter((m) =>
+                          m.mentorId
+                            ? m.mentorId === mentor.id
+                            : m.mentor?.toLowerCase() === mentor.name.toLowerCase()
                         );
                         return (
                           <div className="w-48">
                             <select
-                              defaultValue=""
+                              value=""
                               disabled={assignedMentees.length === 0}
                               className={`w-full truncate border rounded-lg px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all ${
                                 assignedMentees.length === 0
@@ -693,7 +833,6 @@ function AdminDashboard() {
                         <button
                           onClick={() => {
                             setViewingUser(mentor);
-                            setShowViewPassword(false);
                           }}
                           className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                         >
@@ -835,7 +974,7 @@ function AdminDashboard() {
                     Role
                   </th>
                   <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    Mentor
+                    Assigned Mentor
                   </th>
                   <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                     Joined On
@@ -849,7 +988,9 @@ function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/80">
-                {filteredMentees.map((mentee) => (
+                {filteredMentees.map((mentee) => {
+                  const assignedMentor = resolveMenteeMentor(mentee);
+                  return (
                   <tr
                     key={mentee.id}
                     className="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors"
@@ -859,10 +1000,9 @@ function AdminDashboard() {
                         type="button"
                         onClick={() => {
                           setViewingUser(mentee);
-                          setShowViewPassword(false);
                         }}
                         className="flex items-center gap-3 text-left group cursor-pointer focus:outline-none"
-                        title="Click to view mentee details & password"
+                        title="Click to view mentee details"
                       >
                         <div
                           className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 transition-transform group-hover:scale-105 shadow-2xs ${mentee.avatarBg}`}
@@ -883,14 +1023,19 @@ function AdminDashboard() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 dark:text-slate-200 font-medium">
-                      {mentee.mentor && mentors.some((m) => m.name.toLowerCase() === mentee.mentor.toLowerCase()) ? (
+                      {assignedMentor ? (
                         <span className="inline-flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
                           <span className="w-2 h-2 rounded-full bg-blue-500" />
-                          {mentee.mentor}
+                          <span>{assignedMentor.name}</span>
+                          {assignedMentor.status?.toLowerCase() === "inactive" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-300 border border-amber-200/70 dark:border-amber-700/50">
+                              Inactive
+                            </span>
+                          )}
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700">
-                          Not assigned
+                          Not Assigned
                         </span>
                       )}
                     </td>
@@ -910,11 +1055,23 @@ function AdminDashboard() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
+                        {/* Assign / Change Mentor Button */}
+                        <button
+                          type="button"
+                          onClick={() => openAssignMentorModal(mentee)}
+                          className="border border-indigo-200 dark:border-indigo-800/70 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title={assignedMentor ? "Change or remove assigned mentor" : "Assign mentor"}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                          </svg>
+                          <span>{assignedMentor ? "Change Mentor" : "Assign Mentor"}</span>
+                        </button>
+
                         {/* View Button */}
                         <button
                           onClick={() => {
                             setViewingUser(mentee);
-                            setShowViewPassword(false);
                           }}
                           className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                         >
@@ -949,7 +1106,8 @@ function AdminDashboard() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
 
                 {filteredMentees.length === 0 && (
                   <tr>
@@ -1025,47 +1183,10 @@ function AdminDashboard() {
                   }
                   className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
-              </div> 
+              </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                    Password
-                  </label>
-                  <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                    Min 6 characters
-                  </span>
-                </div>
-                <div className="relative">
-                  <input
-                    type={showCreatePassword ? "text" : "password"}
-                    required
-                    minLength={6}
-                    placeholder="Set account password..."
-                    value={formData.password}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, password: e.target.value }))
-                    }
-                    className="w-full px-3.5 py-2 pr-10 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowCreatePassword(!showCreatePassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer focus:outline-none"
-                    title={showCreatePassword ? "Hide password" : "Show password"}
-                  >
-                    {showCreatePassword ? (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
-                      </svg>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
+              <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/60 rounded-lg text-xs text-blue-700 dark:text-blue-300">
+                A temporary password is generated automatically and emailed to the user upon creation.
               </div>
 
               {createRole === "mentee" && (
@@ -1081,7 +1202,7 @@ function AdminDashboard() {
                     className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
                   >
                     <option value="">Unassigned (No Mentor)</option>
-                    {mentors.map((m) => (
+                    {availableMentors.map((m) => (
                       <option key={m.id} value={m.name}>
                         {m.name}
                       </option>
@@ -1374,58 +1495,10 @@ function AdminDashboard() {
                   <div className="flex justify-between">
                     <span className="text-slate-500 dark:text-slate-400">Assigned Mentor:</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {viewingUser.mentor && mentors.some((m) => m.name.toLowerCase() === viewingUser.mentor.toLowerCase())
-                        ? viewingUser.mentor
-                        : "Not assigned"}
+                      {resolveMenteeMentor(viewingUser)?.name || "Not Assigned"}
                     </span>
                   </div>
                 )}
-                {/* Password field - visible when clicking person's name or view */}
-                <div className="flex justify-between items-center py-0.5">
-                  <span className="text-slate-500 dark:text-slate-400">Password:</span>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-semibold px-2 py-1 rounded bg-slate-200/70 dark:bg-slate-800 text-slate-800 dark:text-slate-200 tracking-wider">
-                      {showViewPassword
-                        ? viewingUser.password || (viewingUser.role === "mentor" ? "Mentor@123" : "Mentee@123")
-                        : "••••••••"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowViewPassword(!showViewPassword)}
-                      className="p-1 rounded text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors cursor-pointer"
-                      title={showViewPassword ? "Hide password" : "Show password"}
-                    >
-                      {showViewPassword ? (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
-                        </svg>
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(viewingUser.password || (viewingUser.role === "mentor" ? "Mentor@123" : "Mentee@123"));
-                        setCopiedPassword(true);
-                        setTimeout(() => setCopiedPassword(false), 2000);
-                      }}
-                      className="p-1 rounded text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors cursor-pointer"
-                      title={copiedPassword ? "Copied!" : "Copy password"}
-                    >
-                      {copiedPassword ? (
-                        <span className="text-[10px] text-emerald-600 font-semibold px-1">Copied!</span>
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 dark:text-slate-400">Status:</span>
                   <span
@@ -1515,41 +1588,6 @@ function AdminDashboard() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showEditPassword ? "text" : "password"}
-                    required
-                    minLength={6}
-                    value={editingUser.password || ""}
-                    onChange={(e) =>
-                      setEditingUser((prev) => ({ ...prev, password: e.target.value }))
-                    }
-                    className="w-full px-3.5 py-2 pr-10 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowEditPassword(!showEditPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer focus:outline-none"
-                    title={showEditPassword ? "Hide password" : "Show password"}
-                  >
-                    {showEditPassword ? (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
-                      </svg>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-              </div>
-
               {editingUser.role === "mentee" && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
@@ -1563,11 +1601,19 @@ function AdminDashboard() {
                     className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
                   >
                     <option value="">Unassigned (No Mentor)</option>
-                    {mentors.map((m) => (
+                    {availableMentors.map((m) => (
                       <option key={m.id} value={m.name}>
                         {m.name}
                       </option>
                     ))}
+                    {editingUser.mentor &&
+                      !availableMentors.some(
+                        (m) => m.name?.toLowerCase() === editingUser.mentor?.toLowerCase()
+                      ) && (
+                        <option value={editingUser.mentor}>
+                          {editingUser.mentor} (Inactive)
+                        </option>
+                      )}
                   </select>
                 </div>
               )}
@@ -1615,6 +1661,156 @@ function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* ASSIGN MENTOR MODAL */}
+      {assigningMentee && (() => {
+        const currentMentor = resolveMenteeMentor(assigningMentee);
+        const isUnchangedSelection =
+          Boolean(currentMentor) && Number(selectedMentorId) === currentMentor.id;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md overflow-hidden text-slate-800 dark:text-slate-100">
+              <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    {currentMentor ? "Change Assigned Mentor" : "Assign Mentor"}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Select an available mentor for this mentee.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={assignLoading}
+                  onClick={() => setAssigningMentee(null)}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50 text-xl font-bold cursor-pointer"
+                >
+                  &times;
+                </button>
+              </div>
+
+              <form onSubmit={handleAssignMentorSubmit} className="p-6 space-y-4">
+                {assignError && (
+                  <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 rounded-lg text-xs font-medium flex items-center gap-2">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <span>{assignError}</span>
+                  </div>
+                )}
+
+                {/* Mentee Summary */}
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${assigningMentee.avatarBg}`}
+                    >
+                      {getInitials(assigningMentee.name)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                        {assigningMentee.name}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                        {assigningMentee.email}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-200/70 dark:border-slate-700/70 text-xs">
+                    <span className="text-slate-500 dark:text-slate-400">Current Mentor:</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {currentMentor ? currentMentor.name : "Not Assigned"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* No available mentors warning */}
+                {availableMentors.length === 0 && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/70 text-amber-700 dark:text-amber-300 rounded-lg text-xs font-medium">
+                    No active mentors are available. Create or activate a mentor before assigning.
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                    Select Mentor
+                  </label>
+                  <select
+                    value={selectedMentorId}
+                    onChange={(e) => {
+                      setSelectedMentorId(e.target.value);
+                      if (assignError) setAssignError("");
+                    }}
+                    disabled={assignLoading || availableMentors.length === 0}
+                    className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white bg-white dark:bg-slate-900 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
+                  >
+                    <option value="">-- Choose an available mentor --</option>
+                    {currentMentor &&
+                      !availableMentors.some((m) => m.id === currentMentor.id) && (
+                        <option value={String(currentMentor.id)} disabled>
+                          {currentMentor.name} (Inactive - current)
+                        </option>
+                      )}
+                    {availableMentors.map((m) => (
+                      <option key={m.id} value={String(m.id)}>
+                        {m.name} ({m.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="pt-2 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    {currentMentor && (
+                      <button
+                        type="button"
+                        disabled={assignLoading}
+                        onClick={handleRemoveMentorAssignment}
+                        className="px-3.5 py-2 border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-50 text-rose-600 dark:text-rose-300 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                      >
+                        Remove Mentor
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={assignLoading}
+                      onClick={() => setAssigningMentee(null)}
+                      className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={
+                        assignLoading ||
+                        availableMentors.length === 0 ||
+                        !selectedMentorId ||
+                        isUnchangedSelection
+                      }
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium shadow-xs transition-colors cursor-pointer flex items-center gap-2"
+                    >
+                      {assignLoading ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <span>
+                          {currentMentor ? "Confirm Change" : "Confirm Assignment"}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

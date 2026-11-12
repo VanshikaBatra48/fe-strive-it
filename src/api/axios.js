@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Determine API Base URL dynamically with support for env variables and Wi-Fi hostnames
-const getApiBaseUrl = () => {
+export const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }

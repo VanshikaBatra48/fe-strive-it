@@ -15,8 +15,8 @@ export const FirstLoginModal = () => {
     e.preventDefault();
     setError('');
 
-    if (!newPassword || newPassword.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    if (!newPassword || newPassword.length < 8 || newPassword.length > 72) {
+      setError('Password must be between 8 and 72 characters long.');
       return;
     }
 
@@ -78,7 +78,9 @@ export const FirstLoginModal = () => {
                 type={showPassword ? 'text' : 'password'}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password (min. 6 characters)"
+                placeholder="Enter new password (8–72 characters)"
+                minLength={8}
+                maxLength={72}
                 required
                 className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />

@@ -21,8 +21,8 @@ const ChangePassword = () => {
     setError("");
     setSuccessMsg("");
 
-    if (!newPassword || newPassword.length < 6) {
-      setError("Password must be at least 6 characters long.");
+    if (!newPassword || newPassword.length < 8 || newPassword.length > 72) {
+      setError("Password must be between 8 and 72 characters long.");
       return;
     }
 
@@ -91,7 +91,7 @@ const ChangePassword = () => {
         </div>
 
         <p className="text-xs text-slate-300 leading-relaxed mb-6 bg-slate-900/50 p-3 rounded-lg border border-slate-700/60">
-          This is your first login. You can set a personalized password now, or skip this step to proceed straight to your dashboard.
+          This is your first login. Please set a new personalized password (8–72 characters) to continue to your dashboard.
         </p>
 
         {/* Alerts */}
@@ -124,13 +124,14 @@ const ChangePassword = () => {
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
                 New Password
               </label>
-              <span className="text-[11px] text-slate-400">Min 6 characters</span>
+              <span className="text-[11px] text-slate-400">8–72 characters</span>
             </div>
             <div className="relative">
               <input
                 type={showNewPassword ? "text" : "password"}
                 required
-                minLength={6}
+                minLength={8}
+                maxLength={72}
                 placeholder="Enter new password..."
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
@@ -179,7 +180,8 @@ const ChangePassword = () => {
               <input
                 type={showConfirmPassword ? "text" : "password"}
                 required
-                minLength={6}
+                minLength={8}
+                maxLength={72}
                 placeholder="Re-enter new password..."
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}

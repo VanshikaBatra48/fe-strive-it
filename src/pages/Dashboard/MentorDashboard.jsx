@@ -6,11 +6,48 @@ import useMentors from "../../hooks/useMentors";
 import useTasks from "../../hooks/useTasks";
 
 function getInitials(name = "") {
-  const parts = name.trim().split(" ");
+  const normalized = typeof name === "string" ? name.trim() : "";
+  if (!normalized) return "?";
+  const parts = normalized.split(/\s+/).filter(Boolean);
   if (parts.length >= 2) {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
-  return name.slice(0, 2).toUpperCase();
+  return normalized.slice(0, 2).toUpperCase();
+}
+
+const TASK_STATUS_OPTIONS = [
+  { value: "in-progress", label: "In Progress" },
+  { value: "submitted", label: "Submitted" },
+  { value: "needs-revision", label: "Needs Revision" },
+  { value: "complete", label: "Complete" },
+  { value: "hold", label: "On Hold" },
+];
+
+const TASK_CATEGORIES = [
+  { value: "upskill", label: "Upskill" },
+  { value: "research", label: "Research" },
+  { value: "client-project", label: "Client Project" },
+  { value: "inhouse-project", label: "Inhouse Project" },
+];
+
+const CATEGORY_LABELS = {
+  upskill: "Upskill",
+  research: "Research",
+  "client-project": "Client Project",
+  "inhouse-project": "Inhouse Project",
+};
+
+const STATUS_LABELS = {
+  "in-progress": "In Progress",
+  submitted: "Submitted",
+  "needs-revision": "Needs Revision",
+  complete: "Complete",
+  hold: "On Hold",
+};
+
+function formatShortDate(val) {
+  if (!val) return "-";
+  return String(val).slice(0, 10);
 }
 
 const MentorDashboard = () => {
@@ -32,6 +69,7 @@ const MentorDashboard = () => {
     assignedMentees,
     loading: menteesLoading,
     error: menteesError,
+    deleteMentee,
   } = useMentors(mentorUser.name);
 
   // Only database assigned mentees
@@ -43,6 +81,10 @@ const MentorDashboard = () => {
     error: tasksError,
     assignTask,
     evaluateTask,
+    updateTaskStatus,
+    deleteTask,
+    removeTasksByMenteeId,
+    refetch: refetchTasks,
   } = useTasks();
 
   const [actionLoading, setActionLoading] = useState(false);
@@ -59,50 +101,106 @@ const MentorDashboard = () => {
   // User Dropdown & Modals
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [viewingMentee, setViewingMentee] = useState(null);
+  const [deletingMentee, setDeletingMentee] = useState(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [evaluatingTask, setEvaluatingTask] = useState(null);
+  const [assignError, setAssignError] = useState("");
+  const [evalError, setEvalError] = useState("");
 
-  // New Task Form
+  // New Task Form (matches backend POST /api/tasks fields)
   const [newTask, setNewTask] = useState({
     title: "",
-    menteeName: "",
-    priority: "Medium",
-    dueDate: todayDateString,
+    mentee_id: "",
+    category: "upskill",
+    priority: "medium",
+    start_date: todayDateString,
+    due_date: todayDateString,
+    estimated_hours: 4,
     description: "",
   });
 
   const [dateError, setDateError] = useState("");
 
-  // Evaluation Form
+  // Evaluation Form (matches backend PATCH /api/tasks/:id/evaluate fields)
   const [evaluation, setEvaluation] = useState({
     score: 90,
     feedback: "",
-    status: "Completed",
+    status: "complete",
   });
+
+  const showToast = (type, message) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 4000);
+  };
 
   // Filtered Mentees
   const filteredMentees = useMemo(() => {
     return mentees.filter((m) => {
-      const matchesSearch = `${m.name} ${m.email} ${m.track}`
+      const matchesSearch = `${m.name || ""} ${m.email || ""} ${m.track || ""}`
         .toLowerCase()
         .includes(menteeSearch.toLowerCase());
       const matchesFilter =
-        menteeFilter === "All" || m.status.toLowerCase() === menteeFilter.toLowerCase();
+        menteeFilter === "All" || (m.status || "").toLowerCase() === menteeFilter.toLowerCase();
       return matchesSearch && matchesFilter;
     });
   }, [mentees, menteeSearch, menteeFilter]);
+
+  // Dynamic per-mentee stats derived from live tasks
+  const menteeStatsMap = useMemo(() => {
+    const map = {};
+    for (const m of mentees) {
+      const mTasks = tasks.filter((t) => t.mentee_id === m.id || t.mentee?.id === m.id);
+      const completed = mTasks.filter((t) => t.status === "complete").length;
+      const active =
+        mTasks.find((t) => t.status === "in-progress") ||
+        mTasks.find((t) => t.status === "needs-revision") ||
+        mTasks.find((t) => t.status === "submitted") ||
+        mTasks[0];
+      map[m.id] = {
+        taskCount: mTasks.length,
+        completedCount: completed,
+        progress: mTasks.length > 0 ? Math.round((completed / mTasks.length) * 100) : 0,
+        currentTask: active ? active.title : "No active task",
+      };
+    }
+    return map;
+  }, [mentees, tasks]);
 
   // Filtered Tasks
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
       if (taskFilter === "All") return true;
-      return t.status.toLowerCase() === taskFilter.toLowerCase();
+      return (t.status || "").toLowerCase() === taskFilter.toLowerCase();
     });
   }, [tasks, taskFilter]);
 
-  // Pending reviews count
-  const pendingReviewsCount = useMemo(() => {
-    return tasks.filter((t) => t.status === "Submitted").length;
+  // Pending reviews & metrics
+  const pendingReviewsCount = useMemo(
+    () => tasks.filter((t) => t.status === "submitted").length,
+    [tasks]
+  );
+
+  const avgScore = useMemo(() => {
+    const graded = tasks.filter((t) => typeof t.score === "number");
+    if (graded.length === 0) return null;
+    const sum = graded.reduce((acc, t) => acc + t.score, 0);
+    return Math.round((sum / graded.length) * 10) / 10;
+  }, [tasks]);
+
+  const completionRate = useMemo(() => {
+    if (tasks.length === 0) return 0;
+    const done = tasks.filter((t) => t.status === "complete").length;
+    return Math.round((done / tasks.length) * 100);
+  }, [tasks]);
+
+  const topPerformer = useMemo(() => {
+    const graded = tasks.filter((t) => typeof t.score === "number");
+    if (graded.length === 0) return null;
+    const best = graded.reduce((max, t) => (t.score > max.score ? t : max), graded[0]);
+    return {
+      name: best.mentee?.name || "Mentee",
+      score: best.score,
+    };
   }, [tasks]);
 
   const handleLogout = () => {
@@ -110,55 +208,99 @@ const MentorDashboard = () => {
     navigate("/");
   };
 
-  // Assign task handler with strict date validation (MUST NOT BE IN THE PAST)
+  const openAssignModal = (preferredMenteeId = "") => {
+    setDateError("");
+    setAssignError("");
+    setNewTask((prev) => ({
+      ...prev,
+      mentee_id: preferredMenteeId
+        ? String(preferredMenteeId)
+        : mentees[0]?.id
+        ? String(mentees[0].id)
+        : "",
+      start_date: prev.start_date || todayDateString,
+      due_date: prev.due_date || todayDateString,
+    }));
+    setShowAssignModal(true);
+  };
+
+  // Assign task handler matching backend POST /api/tasks schema
   const handleAssignTask = async (e) => {
     e.preventDefault();
-    if (!newTask.title.trim()) return;
+    setAssignError("");
 
-    if (!newTask.dueDate) {
-      setDateError("Please select a valid due date.");
+    if (!newTask.title.trim() || newTask.title.trim().length < 3) {
+      setAssignError("Title must be at least 3 characters.");
       return;
     }
 
-    if (newTask.dueDate < todayDateString) {
-      setDateError("Due date cannot be in the past! Please select today or a future date.");
+    const targetMenteeId = Number(newTask.mentee_id || mentees[0]?.id);
+    if (!targetMenteeId) {
+      setAssignError("Please select an assigned mentee.");
+      return;
+    }
+
+    if (!newTask.start_date || !newTask.due_date) {
+      setDateError("Please provide both start date and due date.");
+      return;
+    }
+
+    if (newTask.due_date < todayDateString) {
+      setDateError("Due date cannot be in the past.");
+      return;
+    }
+
+    if (newTask.due_date < newTask.start_date) {
+      setDateError("Due date must be on or after the start date.");
+      return;
+    }
+
+    if (!newTask.description.trim()) {
+      setAssignError("Task description is required.");
+      return;
+    }
+
+    const estimatedHours = Number(newTask.estimated_hours);
+    if (!Number.isInteger(estimatedHours) || estimatedHours <= 0) {
+      setAssignError("Estimated hours must be a positive whole number.");
       return;
     }
 
     setDateError("");
-    const selectedMentee = mentees.find((m) => m.name === newTask.menteeName);
-    const created = {
+    const payload = {
       title: newTask.title.trim(),
-      menteeName: newTask.menteeName || mentees[0]?.name,
-      menteeEmail: selectedMentee?.email || "",
-      mentorName: mentorUser.name,
-      mentorEmail: mentorUser.email,
-      track: selectedMentee?.track || "Fullstack Track",
+      mentee_id: targetMenteeId,
+      category: newTask.category,
       priority: newTask.priority,
-      dueDate: newTask.dueDate,
-      description: newTask.description,
+      start_date: newTask.start_date,
+      due_date: newTask.due_date,
+      estimated_hours: estimatedHours,
+      description: newTask.description.trim(),
     };
 
     setActionLoading(true);
-    const res = await assignTask(created);
+    const res = await assignTask(payload);
     setActionLoading(false);
 
     if (res.success) {
+      const selectedMentee = mentees.find((m) => m.id === targetMenteeId);
       setShowAssignModal(false);
       setNewTask({
         title: "",
-        menteeName: mentees[0]?.name || "",
-        priority: "Medium",
-        dueDate: todayDateString,
+        mentee_id: mentees[0]?.id ? String(mentees[0].id) : "",
+        category: "upskill",
+        priority: "medium",
+        start_date: todayDateString,
+        due_date: todayDateString,
+        estimated_hours: 4,
         description: "",
       });
-      setNotification({
-        type: "success",
-        message: `Task assigned to ${created.menteeName} successfully!`,
-      });
-      setTimeout(() => setNotification(null), 3500);
+      showToast(
+        "success",
+        `Task assigned to ${selectedMentee?.name || "mentee"} successfully!`
+      );
     } else {
-      alert(res.error || "Failed to assign task");
+      setAssignError(res.error || "Failed to assign task");
     }
   };
 
@@ -166,25 +308,84 @@ const MentorDashboard = () => {
   const handleEvaluateSubmission = async (e) => {
     e.preventDefault();
     if (!evaluatingTask) return;
+    setEvalError("");
+
+    if (!evaluation.feedback.trim()) {
+      setEvalError("Evaluation feedback is required.");
+      return;
+    }
+
+    if (
+      evaluation.status === "complete" &&
+      (evaluation.score === "" || evaluation.score === null || evaluation.score === undefined)
+    ) {
+      setEvalError("Score (0 - 100) is required when marking a task complete.");
+      return;
+    }
 
     setActionLoading(true);
     const res = await evaluateTask(evaluatingTask.id, {
       status: evaluation.status,
-      score: Number(evaluation.score),
-      feedback: evaluation.feedback,
+      score:
+        evaluation.score === "" || evaluation.score === null || evaluation.score === undefined
+          ? null
+          : Math.round(Number(evaluation.score)),
+      feedback: evaluation.feedback.trim(),
     });
     setActionLoading(false);
 
     if (res.success) {
       setEvaluatingTask(null);
-      setNotification({
-        type: "success",
-        message: "Evaluation submitted successfully!",
-      });
-      setTimeout(() => setNotification(null), 3500);
+      showToast("success", "Evaluation submitted successfully!");
     } else {
-      alert(res.error || "Failed to submit evaluation");
+      setEvalError(res.error || "Failed to submit evaluation");
     }
+  };
+
+  // Status update handler (Mentor & Mentee can both update status)
+  const handleStatusChange = async (taskId, nextStatus) => {
+    const res = await updateTaskStatus(taskId, nextStatus);
+    if (res.success) {
+      showToast("success", `Task status updated to ${STATUS_LABELS[nextStatus] || nextStatus}`);
+    } else {
+      showToast("error", res.error || "Failed to update task status");
+    }
+  };
+
+  // Delete single task
+  const handleDeleteTask = async (task) => {
+    if (!window.confirm(`Delete task "${task.title}"?`)) return;
+    const res = await deleteTask(task.id);
+    if (res.success) {
+      showToast("success", `Task "${task.title}" deleted.`);
+    } else {
+      showToast("error", res.error || "Failed to delete task");
+    }
+  };
+
+  // Confirm delete mentee + cascade tasks
+  const handleConfirmDeleteMentee = async () => {
+    if (!deletingMentee) return;
+    const target = deletingMentee;
+    setActionLoading(true);
+    const res = await deleteMentee(target.id);
+    if (res.success) {
+      removeTasksByMenteeId(target.id);
+      await refetchTasks();
+      if (viewingMentee?.id === target.id) {
+        setViewingMentee(null);
+      }
+      setDeletingMentee(null);
+      const countMsg =
+        res.deletedTasksCount > 0
+          ? ` (${res.deletedTasksCount} assigned task${res.deletedTasksCount > 1 ? "s" : ""} deleted)`
+          : "";
+      showToast("success", `${target.name} has been deleted${countMsg}.`);
+    } else {
+      setDeletingMentee(null);
+      showToast("error", res.error || "Failed to delete mentee");
+    }
+    setActionLoading(false);
   };
 
   return (
@@ -334,10 +535,7 @@ const MentorDashboard = () => {
 
             {/* Quick Action Button */}
             <button
-              onClick={() => {
-                setDateError("");
-                setShowAssignModal(true);
-              }}
+              onClick={() => openAssignModal()}
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -395,14 +593,31 @@ const MentorDashboard = () => {
 
         {/* Notification Toast */}
         {notification && (
-          <div className="mb-5 p-3.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 rounded-xl text-sm flex items-center justify-between shadow-xs animate-fadeIn">
+          <div
+            className={`mb-5 p-3.5 rounded-xl text-sm flex items-center justify-between shadow-xs animate-fadeIn border ${
+              notification.type === "error"
+                ? "bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-300"
+                : "bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+            }`}
+          >
             <div className="flex items-center gap-2.5">
-              <svg className="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-              </svg>
+              {notification.type === "error" ? (
+                <svg className="w-5 h-5 text-rose-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
               <span className="font-medium">{notification.message}</span>
             </div>
-            <button onClick={() => setNotification(null)} className="text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-200 text-lg font-bold cursor-pointer leading-none">&times;</button>
+            <button
+              onClick={() => setNotification(null)}
+              className="hover:opacity-75 text-lg font-bold cursor-pointer leading-none"
+            >
+              &times;
+            </button>
           </div>
         )}
 
@@ -488,7 +703,9 @@ const MentorDashboard = () => {
             </div>
             <div>
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Avg. Score</p>
-              <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">92.4%</h2>
+              <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">
+                {avgScore !== null ? `${avgScore}%` : "N/A"}
+              </h2>
             </div>
           </div>
         </div>
@@ -500,7 +717,7 @@ const MentorDashboard = () => {
             <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-blue-600 rounded-2xl p-6 text-white shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div>
                 <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white mb-2">
-                  Sprint 3 &bull; Active Training Phase
+                  Mentorship Overview &bull; Live Cohort
                 </span>
                 <h3 className="text-xl font-bold">Welcome back, {mentorUser.name}!</h3>
                 <p className="text-indigo-100 text-sm mt-1 max-w-xl">
@@ -509,10 +726,7 @@ const MentorDashboard = () => {
               </div>
               <div>
                 <button
-                  onClick={() => {
-                    setDateError("");
-                    setShowAssignModal(true);
-                  }}
+                  onClick={() => openAssignModal()}
                   className="bg-white text-indigo-700 hover:bg-indigo-50 font-semibold px-4 py-2 rounded-lg text-sm shadow-sm transition-colors cursor-pointer"
                 >
                   + Assign New Task
@@ -534,15 +748,15 @@ const MentorDashboard = () => {
                 </button>
               </div>
 
-              {tasks.filter((t) => t.status === "Submitted").length === 0 ? (
+              {tasks.filter((t) => t.status === "submitted").length === 0 ? (
                 <div className="text-center py-10 bg-slate-50 dark:bg-slate-900/40 rounded-lg border border-dashed border-slate-200 dark:border-slate-700">
-                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">All submissions are up to date! 🎉</p>
+                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">All submissions are up to date!</p>
                   <p className="text-xs text-slate-400 mt-1">No pending reviews from your assigned mentees.</p>
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100 dark:divide-slate-700">
                   {tasks
-                    .filter((t) => t.status === "Submitted")
+                    .filter((t) => t.status === "submitted")
                     .map((task) => (
                       <div key={task.id} className="py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                         <div className="min-w-0">
@@ -550,21 +764,21 @@ const MentorDashboard = () => {
                             <span className="font-semibold text-sm text-slate-900 dark:text-white truncate">
                               {task.title}
                             </span>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30">
                               {task.priority}
                             </span>
                           </div>
                           <p className="text-xs text-slate-500 dark:text-slate-300 mt-0.5">
-                            Submitted by <span className="font-medium text-slate-700 dark:text-slate-100">{task.menteeName}</span> &bull; Due: {task.dueDate}
+                            Submitted by <span className="font-medium text-slate-700 dark:text-slate-100">{task.mentee?.name || "Mentee"}</span> &bull; Due: {formatShortDate(task.due_date)}
                           </p>
-                          {task.submissionUrl && (
+                          {task.submission_url && (
                             <a
-                              href={task.submissionUrl}
+                              href={task.submission_url}
                               target="_blank"
                               rel="noreferrer"
                               className="inline-flex items-center gap-1 text-[11px] text-indigo-600 dark:text-indigo-300 hover:underline mt-1"
                             >
-                              <span>GitHub Repository</span>
+                              <span>Submission Link</span>
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                               </svg>
@@ -573,11 +787,12 @@ const MentorDashboard = () => {
                         </div>
                         <button
                           onClick={() => {
+                            setEvalError("");
                             setEvaluatingTask(task);
                             setEvaluation({
-                              score: 90,
-                              feedback: "",
-                              status: "Completed",
+                              score: task.score ?? 90,
+                              feedback: task.feedback || "",
+                              status: "complete",
                             });
                           }}
                           className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer flex-shrink-0"
@@ -632,7 +847,14 @@ const MentorDashboard = () => {
 
             {/* Mentees Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
-              {filteredMentees.map((mentee) => (
+              {filteredMentees.map((mentee) => {
+                const stats = menteeStatsMap[mentee.id] || {
+                  taskCount: 0,
+                  completedCount: 0,
+                  progress: 0,
+                  currentTask: "No active task",
+                };
+                return (
                 <div
                   key={mentee.id}
                   className="rounded-xl border border-slate-200/80 dark:border-slate-700/80 p-5 hover:shadow-md transition-shadow bg-white dark:bg-slate-800/80 flex flex-col justify-between"
@@ -647,7 +869,7 @@ const MentorDashboard = () => {
                           <h3 className="font-bold text-slate-900 dark:text-white text-sm">{mentee.name}</h3>
                           <p className="text-xs text-slate-500 dark:text-slate-300">{mentee.email}</p>
                           <span className="inline-block mt-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-200/60 dark:border-indigo-500/30 px-2 py-0.5 rounded">
-                            {mentee.track}
+                            {stats.taskCount} {stats.taskCount === 1 ? "Task" : "Tasks"}
                           </span>
                         </div>
                       </div>
@@ -666,51 +888,59 @@ const MentorDashboard = () => {
                     {/* Progress Bar */}
                     <div className="mt-5">
                       <div className="flex justify-between text-xs font-medium text-slate-700 dark:text-slate-200 mb-1">
-                        <span>Milestone Progress</span>
-                        <span className="font-bold text-indigo-600 dark:text-indigo-300">{mentee.progress}%</span>
+                        <span>Task Completion Progress</span>
+                        <span className="font-bold text-indigo-600 dark:text-indigo-300">{stats.progress}%</span>
                       </div>
                       <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-500"
-                          style={{ width: `${mentee.progress}%` }}
+                          style={{ width: `${stats.progress}%` }}
                         />
                       </div>
                     </div>
 
-                    {/* Current Task & Attendance Info */}
+                    {/* Current Task & Completed Info */}
                     <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/80 grid grid-cols-2 gap-2 text-xs">
                       <div>
-                        <span className="text-slate-400 dark:text-slate-400 block text-[10px] uppercase font-semibold">Attendance</span>
-                        <span className="font-bold text-slate-800 dark:text-slate-100">{mentee.attendance}</span>
+                        <span className="text-slate-400 dark:text-slate-400 block text-[10px] uppercase font-semibold">Completed</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-100">
+                          {stats.completedCount} / {stats.taskCount}
+                        </span>
                       </div>
                       <div>
                         <span className="text-slate-400 dark:text-slate-400 block text-[10px] uppercase font-semibold">Current Task</span>
-                        <span className="font-medium text-slate-700 dark:text-slate-200 truncate block">{mentee.currentTask}</span>
+                        <span className="font-medium text-slate-700 dark:text-slate-200 truncate block">{stats.currentTask}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Actions */}
                   <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700/80 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setViewingMentee(mentee)}
+                        className="px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                      >
+                        View Details
+                      </button>
+                      <button
+                        onClick={() => setDeletingMentee(mentee)}
+                        className="px-2.5 py-1.5 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                        title="Delete mentee and all their assigned tasks"
+                      >
+                        Delete
+                      </button>
+                    </div>
                     <button
-                      onClick={() => setViewingMentee(mentee)}
-                      className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-                    >
-                      View Details
-                    </button>
-                    <button
-                      onClick={() => {
-                        setDateError("");
-                        setNewTask({ ...newTask, menteeName: mentee.name });
-                        setShowAssignModal(true);
-                      }}
+                      onClick={() => openAssignModal(mentee.id)}
                       className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer shadow-xs"
                     >
                       + Assign Task
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
 
               {filteredMentees.length === 0 && (
                 <div className="col-span-full py-12 text-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-8">
@@ -735,9 +965,9 @@ const MentorDashboard = () => {
                 </p>
               </div>
 
-              <div className="flex items-center gap-3 w-full sm:w-auto">
-                <div className="flex bg-slate-100 dark:bg-slate-700 p-0.5 rounded-lg text-xs font-medium">
-                  {["All", "In Progress", "Submitted", "Completed"].map((filter) => (
+              <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                <div className="flex flex-wrap bg-slate-100 dark:bg-slate-700 p-0.5 rounded-lg text-xs font-medium">
+                  {["All", "in-progress", "submitted", "needs-revision", "complete", "hold"].map((filter) => (
                     <button
                       key={filter}
                       onClick={() => setTaskFilter(filter)}
@@ -747,16 +977,13 @@ const MentorDashboard = () => {
                           : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                       }`}
                     >
-                      {filter}
+                      {filter === "All" ? "All" : STATUS_LABELS[filter] || filter}
                     </button>
                   ))}
                 </div>
 
                 <button
-                  onClick={() => {
-                    setDateError("");
-                    setShowAssignModal(true);
-                  }}
+                  onClick={() => openAssignModal()}
                   className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -785,19 +1012,24 @@ const MentorDashboard = () => {
                   {filteredTasks.map((task) => (
                     <tr key={task.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors">
                       <td className="px-6 py-4 max-w-xs">
-                        <p className="font-bold text-slate-900 dark:text-white text-sm">{task.title}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-slate-900 dark:text-white text-sm">{task.title}</p>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                            {CATEGORY_LABELS[task.category] || task.category}
+                          </span>
+                        </div>
                         <p className="text-slate-500 dark:text-slate-300 text-xs line-clamp-1 mt-0.5">{task.description}</p>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="font-semibold text-slate-800 dark:text-slate-100">{task.menteeName}</span>
-                        <span className="block text-[11px] text-slate-400 dark:text-slate-400">{task.menteeEmail}</span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-100">{task.mentee?.name || "Mentee"}</span>
+                        <span className="block text-[11px] text-slate-400 dark:text-slate-400">{task.mentee?.email || ""}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            task.priority === "High"
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            task.priority === "high"
                               ? "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
-                              : task.priority === "Medium"
+                              : task.priority === "medium"
                               ? "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30"
                               : "bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-200/60 dark:border-blue-500/30"
                           }`}
@@ -805,48 +1037,81 @@ const MentorDashboard = () => {
                           {task.priority}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">{task.dueDate}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">
+                        {formatShortDate(task.due_date)}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                            task.status === "Completed"
-                              ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
-                              : task.status === "Submitted"
-                              ? "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30"
-                              : "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-500/30"
+                        <select
+                          aria-label={`Change status for ${task.title}`}
+                          value={task.status}
+                          onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${
+                            task.status === "complete"
+                              ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-500/30"
+                              : task.status === "submitted"
+                              ? "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-500/30"
+                              : task.status === "needs-revision"
+                              ? "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200/60 dark:border-rose-500/30"
+                              : task.status === "hold"
+                              ? "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600"
+                              : "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-200/60 dark:border-blue-500/30"
                           }`}
                         >
-                          {task.status}
-                        </span>
+                          {TASK_STATUS_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-700 dark:text-slate-100">
-                        {task.score !== null ? `${task.score}/100` : "-"}
+                        {task.score !== null && task.score !== undefined ? `${task.score}/100` : "-"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
-                        {task.status === "Submitted" ? (
+                        <div className="inline-flex items-center gap-2 justify-end">
+                          {task.status === "submitted" || (task.status === "needs-revision" && task.submission_url) ? (
+                            <button
+                              onClick={() => {
+                                setEvalError("");
+                                setEvaluatingTask(task);
+                                setEvaluation({
+                                  score: task.score ?? 90,
+                                  feedback: task.feedback || "",
+                                  status: "complete",
+                                });
+                              }}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer"
+                            >
+                              Grade & Feedback
+                            </button>
+                          ) : task.status === "complete" || task.feedback ? (
+                            <button
+                              onClick={() => {
+                                setEvalError("");
+                                setEvaluatingTask(task);
+                                setEvaluation({
+                                  score: task.score ?? "",
+                                  feedback: task.feedback || "",
+                                  status: task.status === "needs-revision" ? "needs-revision" : "complete",
+                                });
+                              }}
+                              className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-300 font-semibold px-2 py-1 text-xs cursor-pointer"
+                            >
+                              View Evaluation
+                            </button>
+                          ) : (
+                            <span className="text-slate-400 dark:text-slate-500 italic">Awaiting submission</span>
+                          )}
                           <button
-                            onClick={() => {
-                              setEvaluatingTask(task);
-                              setEvaluation({
-                                score: 90,
-                                feedback: "",
-                                status: "Completed",
-                              });
-                            }}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer"
+                            onClick={() => handleDeleteTask(task)}
+                            title="Delete task"
+                            className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-md transition-colors cursor-pointer"
                           >
-                            Grade & Feedback
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
                           </button>
-                        ) : task.status === "Completed" ? (
-                          <button
-                            onClick={() => setEvaluatingTask(task)}
-                            className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-300 font-semibold px-2 py-1 text-xs cursor-pointer"
-                          >
-                            View Evaluation
-                          </button>
-                        ) : (
-                          <span className="text-slate-400 dark:text-slate-500 italic">In progress</span>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -875,23 +1140,29 @@ const MentorDashboard = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-700">
-                  <span className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase">On-time Completion</span>
-                  <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">94.8%</p>
-                  <p className="text-xs text-emerald-600 dark:text-emerald-300 mt-1 flex items-center gap-1">
-                    <span>&uarr; 3.2% vs last month</span>
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase">Task Completion Rate</span>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{completionRate}%</p>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-300 mt-1">
+                    {tasks.filter((t) => t.status === "complete").length} of {tasks.length} tasks complete
                   </p>
                 </div>
 
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-700">
                   <span className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase">Average Assignment Score</span>
-                  <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">91.5 / 100</p>
-                  <p className="text-xs text-indigo-600 dark:text-indigo-300 mt-1">Highest: Tanvi Jain (95/100)</p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+                    {avgScore !== null ? `${avgScore} / 100` : "No scores yet"}
+                  </p>
+                  <p className="text-xs text-indigo-600 dark:text-indigo-300 mt-1">
+                    {topPerformer ? `Highest: ${topPerformer.name} (${topPerformer.score}/100)` : "Evaluate submissions to see scores"}
+                  </p>
                 </div>
 
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-700">
                   <span className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase">Active Mentees Supervised</span>
-                  <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{mentees.length}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-300 mt-1">All tracks active</p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+                    {mentees.filter((m) => m.status === "Active").length}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-300 mt-1">{mentees.length} total assigned</p>
                 </div>
               </div>
             </div>
@@ -902,7 +1173,7 @@ const MentorDashboard = () => {
       {/* MODAL: ASSIGN TASK (WITH PAST-DATE RESTRICTION) */}
       {showAssignModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6 text-slate-800 dark:text-slate-100">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6 text-slate-800 dark:text-slate-100 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
               <h3 className="text-base font-bold text-slate-900 dark:text-white">Assign New Task</h3>
               <button
@@ -914,13 +1185,20 @@ const MentorDashboard = () => {
             </div>
 
             <form onSubmit={handleAssignTask} className="mt-4 space-y-4">
+              {assignError && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 rounded-lg text-xs font-medium">
+                  {assignError}
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                  Task Title
+                  Task Title <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
+                  minLength={3}
                   placeholder="e.g. Implement Redux Toolkit Store"
                   value={newTask.title}
                   onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
@@ -930,22 +1208,44 @@ const MentorDashboard = () => {
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                  Assign To Mentee
+                  Assign To Mentee <span className="text-rose-500">*</span>
                 </label>
                 <select
-                  value={newTask.menteeName}
-                  onChange={(e) => setNewTask({ ...newTask, menteeName: e.target.value })}
+                  required
+                  value={newTask.mentee_id}
+                  onChange={(e) => setNewTask({ ...newTask, mentee_id: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
                 >
-                  {mentees.map((m) => (
-                    <option key={m.id} value={m.name}>
-                      {m.name} ({m.track})
-                    </option>
-                  ))}
+                  {mentees.length === 0 ? (
+                    <option value="">No mentees assigned</option>
+                  ) : (
+                    mentees.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.email})
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                    Category
+                  </label>
+                  <select
+                    value={newTask.category}
+                    onChange={(e) => setNewTask({ ...newTask, category: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                  >
+                    {TASK_CATEGORIES.map((cat) => (
+                      <option key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
                     Priority
@@ -955,10 +1255,33 @@ const MentorDashboard = () => {
                     onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
                   >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
                   </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                    Start Date <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newTask.start_date}
+                    onChange={(e) => {
+                      const selected = e.target.value;
+                      setNewTask({ ...newTask, start_date: selected });
+                      if (selected && newTask.due_date && newTask.due_date < selected) {
+                        setDateError("Due date must be on or after the start date.");
+                      } else {
+                        setDateError("");
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:[color-scheme:dark] cursor-pointer"
+                  />
                 </div>
 
                 <div>
@@ -968,13 +1291,15 @@ const MentorDashboard = () => {
                   <input
                     type="date"
                     required
-                    min={todayDateString}
-                    value={newTask.dueDate}
+                    min={newTask.start_date || todayDateString}
+                    value={newTask.due_date}
                     onChange={(e) => {
                       const selected = e.target.value;
-                      setNewTask({ ...newTask, dueDate: selected });
+                      setNewTask({ ...newTask, due_date: selected });
                       if (selected && selected < todayDateString) {
                         setDateError("Due date cannot be in the past!");
+                      } else if (selected && newTask.start_date && selected < newTask.start_date) {
+                        setDateError("Due date must be on or after start date!");
                       } else {
                         setDateError("");
                       }
@@ -988,6 +1313,21 @@ const MentorDashboard = () => {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                  Estimated Hours <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  required
+                  value={newTask.estimated_hours}
+                  onChange={(e) => setNewTask({ ...newTask, estimated_hours: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+
               {dateError && (
                 <p className="text-xs text-rose-500 font-semibold flex items-center gap-1">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -999,10 +1339,11 @@ const MentorDashboard = () => {
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                  Description & Deliverables
+                  Description & Deliverables <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   rows="3"
+                  required
                   placeholder="Details, technical acceptance criteria, resources..."
                   value={newTask.description}
                   onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
@@ -1020,7 +1361,7 @@ const MentorDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={actionLoading}
+                  disabled={actionLoading || mentees.length === 0}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer flex items-center gap-2"
                 >
                   {actionLoading ? "Assigning..." : "Create & Assign"}
@@ -1038,7 +1379,9 @@ const MentorDashboard = () => {
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">Evaluate Code Submission</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{evaluatingTask.menteeName} &bull; {evaluatingTask.title}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {evaluatingTask.mentee?.name || "Mentee"} &bull; {evaluatingTask.title}
+                </p>
               </div>
               <button
                 onClick={() => setEvaluatingTask(null)}
@@ -1049,32 +1392,53 @@ const MentorDashboard = () => {
             </div>
 
             <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-900/60 rounded-lg border border-slate-100 dark:border-slate-700 text-xs space-y-1.5">
-              <p className="font-semibold text-slate-800 dark:text-slate-200">Deliverable Links:</p>
-              {evaluatingTask.submissionUrl ? (
+              <p className="font-semibold text-slate-800 dark:text-slate-200">Deliverables:</p>
+              {evaluatingTask.submission_url ? (
                 <a
-                  href={evaluatingTask.submissionUrl}
+                  href={evaluatingTask.submission_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-indigo-600 dark:text-indigo-400 hover:underline block font-mono"
+                  className="text-indigo-600 dark:text-indigo-400 hover:underline block font-mono break-all"
                 >
-                  {evaluatingTask.submissionUrl}
+                  Submission: {evaluatingTask.submission_url}
                 </a>
               ) : (
-                <p className="text-slate-400 italic">No repo URL provided</p>
+                <p className="text-slate-400 italic">No submission URL provided</p>
+              )}
+              {evaluatingTask.demo_url && (
+                <a
+                  href={evaluatingTask.demo_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-indigo-600 dark:text-indigo-400 hover:underline block font-mono break-all"
+                >
+                  Demo: {evaluatingTask.demo_url}
+                </a>
+              )}
+              {evaluatingTask.submission_notes && (
+                <p className="text-slate-600 dark:text-slate-300 pt-1">
+                  <span className="font-semibold">Notes:</span> {evaluatingTask.submission_notes}
+                </p>
               )}
             </div>
 
             <form onSubmit={handleEvaluateSubmission} className="mt-4 space-y-4">
+              {evalError && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 rounded-lg text-xs font-medium">
+                  {evalError}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                    Score (0 - 100)
+                    Score (0 - 100){evaluation.status === "complete" ? " *" : ""}
                   </label>
                   <input
                     type="number"
                     min="0"
                     max="100"
-                    required
+                    required={evaluation.status === "complete"}
                     value={evaluation.score}
                     onChange={(e) => setEvaluation({ ...evaluation, score: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500/20"
@@ -1090,15 +1454,15 @@ const MentorDashboard = () => {
                     onChange={(e) => setEvaluation({ ...evaluation, status: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
                   >
-                    <option value="Completed">Approved (Completed)</option>
-                    <option value="Needs Revision">Needs Revision</option>
+                    <option value="complete">Approved (Complete)</option>
+                    <option value="needs-revision">Needs Revision</option>
                   </select>
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                  Mentor Feedback & Code Review Notes
+                  Mentor Feedback & Code Review Notes <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   rows="4"
@@ -1120,9 +1484,10 @@ const MentorDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
                 >
-                  Submit Evaluation
+                  {actionLoading ? "Saving..." : "Submit Evaluation"}
                 </button>
               </div>
             </form>
@@ -1151,41 +1516,108 @@ const MentorDashboard = () => {
               <div>
                 <h4 className="font-bold text-slate-900 dark:text-white text-base">{viewingMentee.name}</h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400">{viewingMentee.email}</p>
-                <span className="inline-block mt-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-0.5 rounded">
-                  {viewingMentee.track}
-                </span>
               </div>
             </div>
 
-            <div className="mt-6 space-y-3 text-xs bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
-              <div className="flex justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Joined On:</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">{viewingMentee.joinedOn}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Status:</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{viewingMentee.status}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Attendance:</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">{viewingMentee.attendance}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Curriculum Progress:</span>
-                <span className="font-bold text-indigo-600 dark:text-indigo-400">{viewingMentee.progress}%</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Current Task:</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">{viewingMentee.currentTask}</span>
-              </div>
-            </div>
+            {(() => {
+              const stats = menteeStatsMap[viewingMentee.id] || {
+                taskCount: 0,
+                completedCount: 0,
+                progress: 0,
+                currentTask: "No active task",
+              };
+              return (
+                <div className="mt-6 space-y-3 text-xs bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 dark:text-slate-400">Joined On:</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">{viewingMentee.joinedOn}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 dark:text-slate-400">Status:</span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">{viewingMentee.status}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 dark:text-slate-400">Completed Tasks:</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {stats.completedCount} / {stats.taskCount}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 dark:text-slate-400">Task Progress:</span>
+                    <span className="font-bold text-indigo-600 dark:text-indigo-400">{stats.progress}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 dark:text-slate-400">Current Task:</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[200px]">
+                      {stats.currentTask}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
 
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex items-center justify-between gap-2">
+              <button
+                onClick={() => setDeletingMentee(viewingMentee)}
+                className="px-3.5 py-2 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg text-xs font-semibold cursor-pointer"
+              >
+                Delete Mentee
+              </button>
               <button
                 onClick={() => setViewingMentee(null)}
                 className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white rounded-lg text-xs font-semibold hover:bg-slate-900 cursor-pointer"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CONFIRM DELETE MENTEE (AND CASCADE TASKS) */}
+      {deletingMentee && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6 text-slate-800 dark:text-slate-100">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Delete Mentee?
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1.5 leading-relaxed">
+                  Are you sure you want to delete{" "}
+                  <span className="font-semibold text-slate-900 dark:text-white">
+                    {deletingMentee.name}
+                  </span>
+                  ? All{" "}
+                  <span className="font-semibold text-rose-600 dark:text-rose-400">
+                    {menteeStatsMap[deletingMentee.id]?.taskCount || 0} task(s)
+                  </span>{" "}
+                  assigned to this mentee will also be permanently deleted.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingMentee(null)}
+                disabled={actionLoading}
+                className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteMentee}
+                disabled={actionLoading}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+              >
+                {actionLoading ? "Deleting..." : "Delete Mentee & Tasks"}
               </button>
             </div>
           </div>

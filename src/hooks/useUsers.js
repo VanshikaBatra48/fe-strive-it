@@ -35,23 +35,35 @@ export function normalizeUser(rawUser, index = 0) {
       ? 'Inactive'
       : 'Active';
 
+  const mentorObject =
+    rawUser.mentor && typeof rawUser.mentor === 'object' ? rawUser.mentor : null;
+
+  const rawAssignedMentor =
+    mentorObject?.name ||
+    (typeof rawUser.assigned_to === 'string' ? rawUser.assigned_to : null);
+
   const assignedMentor =
-    rawUser.assigned_to &&
-    rawUser.assigned_to.toLowerCase() !== 'admin' &&
-    rawUser.assigned_to.toLowerCase() !== 'unassigned' &&
-    rawUser.assigned_to.toLowerCase() !== 'null'
-      ? rawUser.assigned_to
+    rawAssignedMentor &&
+    rawAssignedMentor.toLowerCase() !== 'admin' &&
+    rawAssignedMentor.toLowerCase() !== 'unassigned' &&
+    rawAssignedMentor.toLowerCase() !== 'null'
+      ? rawAssignedMentor
       : null;
+
+  const assignedMentorId =
+    rawUser.mentor_id ?? mentorObject?.id ?? null;
 
   return {
     ...rawUser,
     id: rawUser.id,
     name: rawUser.name || 'User',
     email: rawUser.email || '',
-    password: rawUser.password || rawUser.raw_password || '',
     role: rawUser.role?.toLowerCase() || 'mentee',
     status: statusFormatted,
     mentor: assignedMentor,
+    mentorId: assignedMentorId,
+    mentor_id: assignedMentorId,
+    mentorDetails: mentorObject,
     assigned_to: assignedMentor,
     track: rawUser.track || 'Fullstack Engineering',
     progress: rawUser.progress !== undefined ? rawUser.progress : 0,
@@ -126,17 +138,27 @@ export const useUsers = (initialFilters = {}, autoFetch = true) => {
   const createUser = useCallback(async (userData) => {
     setError(null);
     try {
-      const res = await userApi.createUser({
+      const role = (userData.role || 'mentee').toLowerCase();
+      const assignedMentor = userData.mentor || userData.assigned_to || null;
+      const payload = {
         name: userData.name,
         email: userData.email,
-        password: userData.password,
-        role: userData.role || 'mentee',
-        assigned_to: userData.mentor || userData.assigned_to || 'admin',
-        assignedMentees: userData.assignedMentees || [],
-      });
+        role,
+        ...(userData.status ? { status: userData.status.toLowerCase() } : {}),
+        ...(role === 'mentee' && userData.mentor_id !== undefined
+          ? { mentor_id: userData.mentor_id }
+          : role === 'mentee'
+            ? { assigned_to: assignedMentor }
+            : {}),
+        ...(role === 'mentor' && Array.isArray(userData.assignedMentees)
+          ? { assignedMentees: userData.assignedMentees }
+          : {}),
+      };
+
+      const res = await userApi.createUser(payload);
       if (res?.success && res.data) {
         await fetchUsers();
-        return { success: true, data: res.data };
+        return { success: true, data: res.data, message: res.message };
       }
       throw new Error(res?.message || 'Failed to create user');
     } catch (err) {
@@ -150,21 +172,28 @@ export const useUsers = (initialFilters = {}, autoFetch = true) => {
   const updateUser = useCallback(async (id, updateData) => {
     setError(null);
     try {
-      const payload = {
-        name: updateData.name,
-        email: updateData.email,
-        status: updateData.status ? updateData.status.toLowerCase() : undefined,
-        role: updateData.role ? updateData.role.toLowerCase() : undefined,
-        assigned_to: updateData.mentor || updateData.assigned_to,
-        password: updateData.password ? updateData.password.trim() : undefined,
-      };
+      const payload = {};
+      if (updateData.name !== undefined) payload.name = updateData.name;
+      if (updateData.email !== undefined) payload.email = updateData.email;
+      if (updateData.status !== undefined) {
+        payload.status = updateData.status ? updateData.status.toLowerCase() : undefined;
+      }
+      if (updateData.role !== undefined) {
+        payload.role = updateData.role ? updateData.role.toLowerCase() : undefined;
+      }
+      if (updateData.mentor_id !== undefined) {
+        payload.mentor_id = updateData.mentor_id;
+      } else if (updateData.mentor !== undefined || updateData.assigned_to !== undefined) {
+        payload.assigned_to = updateData.mentor || updateData.assigned_to || null;
+      }
+      if (Array.isArray(updateData.assignedMentees)) {
+        payload.assignedMentees = updateData.assignedMentees;
+      }
 
       const res = await userApi.updateUser(id, payload);
       if (res?.success && res.data) {
         const normalized = normalizeUser(res.data);
-        setUsers((prev) =>
-          prev.map((u) => (u.id === Number(id) ? { ...u, ...normalized } : u))
-        );
+        await fetchUsers();
         return { success: true, data: normalized };
       }
       throw new Error(res?.message || 'Failed to update user');
@@ -173,7 +202,32 @@ export const useUsers = (initialFilters = {}, autoFetch = true) => {
       setError(msg);
       return { success: false, error: msg };
     }
-  }, []);
+  }, [fetchUsers]);
+
+  // Assign, change, or remove mentor for a mentee (Admin only)
+  const assignMentorToMentee = useCallback(async (menteeId, mentorId) => {
+    try {
+      const normalizedMentorId =
+        mentorId === '' || mentorId === null || mentorId === undefined
+          ? null
+          : Number(mentorId);
+      const res = await userApi.assignMentor(menteeId, normalizedMentorId);
+      if (res?.success && res.data) {
+        await fetchUsers();
+        return {
+          success: true,
+          action: res.action,
+          message: res.message,
+          data: normalizeUser(res.data),
+        };
+      }
+      throw new Error(res?.message || 'Failed to update mentor assignment');
+    } catch (err) {
+      const msg =
+        err.response?.data?.message || err.message || 'Error updating mentor assignment';
+      return { success: false, error: msg };
+    }
+  }, [fetchUsers]);
 
   // Delete user
   const deleteUser = useCallback(async (id) => {
@@ -189,15 +243,23 @@ export const useUsers = (initialFilters = {}, autoFetch = true) => {
               if (
                 userToDelete &&
                 userToDelete.role === 'mentor' &&
-                u.mentor &&
-                u.mentor.toLowerCase() === userToDelete.name.toLowerCase()
+                (u.mentorId === Number(id) ||
+                  (u.mentor &&
+                    u.mentor.toLowerCase() === userToDelete.name.toLowerCase()))
               ) {
-                return { ...u, mentor: null, assigned_to: null };
+                return {
+                  ...u,
+                  mentor: null,
+                  mentorId: null,
+                  mentor_id: null,
+                  mentorDetails: null,
+                  assigned_to: null,
+                };
               }
               return u;
             })
         );
-        return { success: true };
+        return { success: true, deletedTasksCount: res.deletedTasksCount ?? 0 };
       }
       throw new Error(res?.message || 'Failed to delete user');
     } catch (err) {
@@ -215,6 +277,7 @@ export const useUsers = (initialFilters = {}, autoFetch = true) => {
     fetchUsers,
     createUser,
     updateUser,
+    assignMentorToMentee,
     deleteUser,
     refetch: fetchUsers,
   };

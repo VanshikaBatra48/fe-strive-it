@@ -121,10 +121,17 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await authApi.changePassword(newPassword);
       if (data?.success) {
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+          setToken(data.token);
+        }
         setMustChangePassword(false);
         setUser((prev) => {
-          if (!prev) return prev;
-          const updated = { ...prev, firstLogin: false };
+          const updated = {
+            ...(prev || {}),
+            ...(data.user || {}),
+            firstLogin: false,
+          };
           localStorage.setItem('user', JSON.stringify(updated));
           return updated;
         });

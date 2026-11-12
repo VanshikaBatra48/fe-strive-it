@@ -7,11 +7,41 @@ import useTasks from "../../hooks/useTasks";
 // Helper to get 2-letter initials
 
 function getInitials(name = "") {
-  const parts = name.trim().split(" ");
+  const normalized = typeof name === "string" ? name.trim() : "";
+  if (!normalized) return "?";
+  const parts = normalized.split(/\s+/).filter(Boolean);
   if (parts.length >= 2) {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
-  return name.slice(0, 2).toUpperCase();
+  return normalized.slice(0, 2).toUpperCase();
+}
+
+const TASK_STATUS_OPTIONS = [
+  { value: "in-progress", label: "In Progress" },
+  { value: "submitted", label: "Submitted" },
+  { value: "needs-revision", label: "Needs Revision" },
+  { value: "complete", label: "Complete" },
+  { value: "hold", label: "On Hold" },
+];
+
+const STATUS_LABELS = {
+  "in-progress": "In Progress",
+  submitted: "Submitted",
+  "needs-revision": "Needs Revision",
+  complete: "Complete",
+  hold: "On Hold",
+};
+
+const CATEGORY_LABELS = {
+  upskill: "Upskill",
+  research: "Research",
+  "client-project": "Client Project",
+  "inhouse-project": "Inhouse Project",
+};
+
+function formatShortDate(val) {
+  if (!val) return "-";
+  return String(val).slice(0, 10);
 }
 
 const MenteeDashboard = () => {
@@ -19,14 +49,20 @@ const MenteeDashboard = () => {
   const mainRef = useRef(null);
 
   // Current logged in mentee details from AuthContext
-  const { user: authUser, logout } = useAuth();
+  const { user: authUser, loading: authLoading, logout } = useAuth();
   const menteeUser = useMemo(() => {
+    const rawTrack = typeof authUser?.track === "string" ? authUser.track.trim() : "";
     return {
+      id: authUser?.id || null,
       name: authUser?.name || "Mentee",
       email: authUser?.email || "",
-      role: "mentee",
-      track: authUser?.track || "Fullstack Engineering",
-      mentor: authUser?.assigned_to || authUser?.mentor || "Unassigned",
+      role: authUser?.role || "mentee",
+      status: authUser?.status || "active",
+      track: rawTrack,
+      mentor:
+        authUser?.assigned_to ||
+        (typeof authUser?.mentor === "object" ? authUser.mentor?.name : authUser?.mentor) ||
+        "Unassigned",
       mentorEmail: authUser?.mentorEmail || "",
       attendance: authUser?.attendance || "100%",
     };
@@ -37,20 +73,21 @@ const MenteeDashboard = () => {
     loading: tasksLoading,
     error: tasksError,
     submitTask,
+    updateTaskStatus,
   } = useTasks();
 
   // Filter tasks strictly for this logged-in mentee from the database
   const tasks = useMemo(() => {
-    if (!menteeUser.email && !menteeUser.name) return [];
     return allTasks.filter(
       (t) =>
-        (t.menteeEmail && t.menteeEmail.toLowerCase() === menteeUser.email?.toLowerCase()) ||
-        (t.menteeName && t.menteeName.toLowerCase() === menteeUser.name?.toLowerCase())
+        (menteeUser.id && (t.mentee_id === menteeUser.id || t.mentee?.id === menteeUser.id)) ||
+        (menteeUser.email && t.mentee?.email?.toLowerCase() === menteeUser.email.toLowerCase())
     );
   }, [allTasks, menteeUser]);
 
   const [actionLoading, setActionLoading] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [submitError, setSubmitError] = useState("");
 
   // State: "dashboard", "assignments", "feedback"
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -61,24 +98,35 @@ const MenteeDashboard = () => {
   const [submittingTask, setSubmittingTask] = useState(null);
   const [viewingFeedbackTask, setViewingFeedbackTask] = useState(null);
 
-  // Submission Form State
+  // Submission Form State (matches backend PATCH /api/tasks/:id/submit)
   const [submissionForm, setSubmissionForm] = useState({
-    repoUrl: "",
-    demoUrl: "",
-    notes: "",
+    submission_url: "",
+    demo_url: "",
+    submission_notes: "",
   });
+
+  const showToast = (type, message) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 4000);
+  };
 
   // Filtered Tasks
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
       if (taskFilter === "All") return true;
-      return t.status.toLowerCase() === taskFilter.toLowerCase();
+      return (t.status || "").toLowerCase() === taskFilter.toLowerCase();
     });
   }, [tasks, taskFilter]);
 
   // Tasks with mentor feedback or evaluations
   const feedbackTasks = useMemo(() => {
-    return tasks.filter((t) => t.mentorFeedback || t.status === "Completed" || t.status === "Submitted");
+    return tasks.filter(
+      (t) =>
+        Boolean(t.feedback) ||
+        t.status === "complete" ||
+        t.status === "submitted" ||
+        t.status === "needs-revision"
+    );
   }, [tasks]);
 
   // Evaluated tasks & dynamic average score
@@ -95,40 +143,73 @@ const MenteeDashboard = () => {
 
   // Overall Progress
   const completedCount = useMemo(
-    () => tasks.filter((t) => t.status === "Completed").length,
+    () => tasks.filter((t) => t.status === "complete").length,
     [tasks]
   );
   const progressPercentage =
     tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
+
+  const focusTask = useMemo(() => {
+    return (
+      tasks.find((t) => t.status === "in-progress" || t.status === "needs-revision") ||
+      tasks.find((t) => t.status === "submitted") ||
+      tasks[0] ||
+      null
+    );
+  }, [tasks]);
+
+  const recentEvaluatedTask = useMemo(() => {
+    return tasks.find((t) => Boolean(t.feedback) || t.status === "complete") || null;
+  }, [tasks]);
 
   const handleLogout = () => {
     logout();
     navigate("/");
   };
 
+  const openSubmitModal = (task) => {
+    if (!task) return;
+    setSubmitError("");
+    setSubmittingTask(task);
+    setSubmissionForm({
+      submission_url: task.submission_url || "",
+      demo_url: task.demo_url || "",
+      submission_notes: task.submission_notes || "",
+    });
+  };
+
+  // Status update handler (both Mentee and Mentor can update status)
+  const handleStatusChange = async (taskId, nextStatus) => {
+    const res = await updateTaskStatus(taskId, nextStatus);
+    if (res.success) {
+      showToast("success", `Task status updated to ${STATUS_LABELS[nextStatus] || nextStatus}`);
+    } else {
+      showToast("error", res.error || "Failed to update task status");
+    }
+  };
+
   // Submit task handler
   const handleSubmitTask = async (e) => {
     e.preventDefault();
     if (!submittingTask) return;
+    setSubmitError("");
+
+    const payload = {
+      submission_url: submissionForm.submission_url.trim(),
+      demo_url: submissionForm.demo_url.trim() || null,
+      submission_notes: submissionForm.submission_notes.trim() || null,
+    };
 
     setActionLoading(true);
-    const res = await submitTask(submittingTask.id, {
-      repoUrl: submissionForm.repoUrl,
-      demoUrl: submissionForm.demoUrl,
-      notes: submissionForm.notes,
-    });
+    const res = await submitTask(submittingTask.id, payload);
     setActionLoading(false);
 
     if (res.success) {
       setSubmittingTask(null);
-      setSubmissionForm({ repoUrl: "", demoUrl: "", notes: "" });
-      setNotification({
-        type: "success",
-        message: "Deliverables submitted successfully! Your mentor has been notified.",
-      });
-      setTimeout(() => setNotification(null), 3500);
+      setSubmissionForm({ submission_url: "", demo_url: "", submission_notes: "" });
+      showToast("success", "Deliverables submitted successfully! Your mentor has been notified.");
     } else {
-      alert(res.error || "Failed to submit assignment");
+      setSubmitError(res.error || "Failed to submit assignment");
     }
   };
 
@@ -252,11 +333,9 @@ const MenteeDashboard = () => {
 
             {/* Quick Submit Button */}
             <button
-              onClick={() => {
-                const pendingTask = tasks.find((t) => t.status === "In Progress") || tasks[0];
-                setSubmittingTask(pendingTask);
-              }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              onClick={() => openSubmitModal(focusTask)}
+              disabled={!focusTask}
+              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -274,7 +353,7 @@ const MenteeDashboard = () => {
                   {getInitials(menteeUser.name)}
                 </div>
                 <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 hidden sm:inline">
-                  {menteeUser.name}
+                  {authLoading && !authUser ? "Loading..." : menteeUser.name}
                 </span>
                 <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
@@ -285,10 +364,14 @@ const MenteeDashboard = () => {
               {showProfileMenu && (
                 <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-2 z-50">
                   <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-700">
-                    <p className="text-xs font-semibold text-slate-900 dark:text-white">{menteeUser.name}</p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">{menteeUser.email}</p>
-                    <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
-                      Intern &bull; {menteeUser.track.split("(")[0]}
+                    <p className="text-xs font-semibold text-slate-900 dark:text-white">
+                      {authLoading && !authUser ? "Loading profile..." : menteeUser.name}
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {menteeUser.email || (authLoading ? "Fetching account..." : "No email")}
+                    </p>
+                    <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 capitalize">
+                      Intern &bull; {menteeUser.track ? menteeUser.track.split("(")[0].trim() : menteeUser.status}
                     </span>
                   </div>
 
@@ -313,14 +396,31 @@ const MenteeDashboard = () => {
 
         {/* Notification Toast */}
         {notification && (
-          <div className="mb-5 p-3.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 rounded-xl text-sm flex items-center justify-between shadow-xs animate-fadeIn">
+          <div
+            className={`mb-5 p-3.5 rounded-xl text-sm flex items-center justify-between shadow-xs animate-fadeIn border ${
+              notification.type === "error"
+                ? "bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-300"
+                : "bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+            }`}
+          >
             <div className="flex items-center gap-2.5">
-              <svg className="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-              </svg>
+              {notification.type === "error" ? (
+                <svg className="w-5 h-5 text-rose-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
               <span className="font-medium">{notification.message}</span>
             </div>
-            <button onClick={() => setNotification(null)} className="text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-200 text-lg font-bold cursor-pointer leading-none">&times;</button>
+            <button
+              onClick={() => setNotification(null)}
+              className="hover:opacity-75 text-lg font-bold cursor-pointer leading-none"
+            >
+              &times;
+            </button>
           </div>
         )}
 
@@ -418,23 +518,29 @@ const MenteeDashboard = () => {
             <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-blue-600 rounded-2xl p-6 text-white shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div>
                 <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white mb-2">
-                  Active Sprint &bull; Frontend Track
+                  Intern Workspace &bull; {tasks.length} Assigned {tasks.length === 1 ? "Task" : "Tasks"}
                 </span>
-                <h3 className="text-xl font-bold">Great momentum, {menteeUser.name}! 🚀</h3>
+                <h3 className="text-xl font-bold">Welcome back, {menteeUser.name}!</h3>
                 <p className="text-emerald-100 text-sm mt-1 max-w-xl">
-                  You are performing in the top 10% of the cohort. Supervised by{" "}
-                  <span className="font-bold underline">{menteeUser.mentor}</span>. Keep up the high code quality!
+                  {menteeUser.mentor && menteeUser.mentor !== "Unassigned" ? (
+                    <>
+                      Supervised by <span className="font-bold underline">{menteeUser.mentor}</span>. You have completed{" "}
+                      <span className="font-bold">{completedCount}</span> of {tasks.length} assigned tasks.
+                    </>
+                  ) : (
+                    <>
+                      You have completed <span className="font-bold">{completedCount}</span> of {tasks.length} assigned tasks.
+                    </>
+                  )}
                 </p>
               </div>
               <div>
                 <button
-                  onClick={() => {
-                    const taskToSubmit = tasks.find((t) => t.status === "In Progress") || tasks[0];
-                    setSubmittingTask(taskToSubmit);
-                  }}
-                  className="bg-white text-emerald-800 hover:bg-emerald-50 font-bold px-4 py-2 rounded-lg text-sm shadow-sm transition-colors cursor-pointer"
+                  disabled={!focusTask}
+                  onClick={() => openSubmitModal(focusTask)}
+                  className="bg-white text-emerald-800 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed font-bold px-4 py-2 rounded-lg text-sm shadow-sm transition-colors cursor-pointer"
                 >
-                  Submit Current Task
+                  {focusTask?.status === "submitted" ? "Update Submission" : "Submit Current Task"}
                 </button>
               </div>
             </div>
@@ -446,32 +552,53 @@ const MenteeDashboard = () => {
                 <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs p-6">
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-                      Current Sprint Assignment
+                      Current Focus Assignment
                     </span>
-                    <span className="px-2.5 py-0.5 rounded text-[11px] font-bold bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30">
-                      Due: Oct 28, 2026
-                    </span>
+                    {focusTask && (
+                      <span className="px-2.5 py-0.5 rounded text-[11px] font-bold bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30">
+                        Due: {formatShortDate(focusTask.due_date)}
+                      </span>
+                    )}
                   </div>
 
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                    Build Responsive TMS Dashboard UI
-                  </h3>
-                  <p className="text-slate-600 dark:text-slate-300 text-xs mt-2 leading-relaxed">
-                    Create clean, responsive dashboard components matching the Figma layout. Ensure sidebar is pinned to viewport height, tables feature consistent columns, and form validations are interactive.
-                  </p>
+                  {focusTask ? (
+                    <>
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                        {focusTask.title}
+                      </h3>
+                      <p className="text-slate-600 dark:text-slate-300 text-xs mt-2 leading-relaxed">
+                        {focusTask.description}
+                      </p>
 
-                  <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-900/60 rounded-lg border border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                    <div className="text-xs text-slate-600 dark:text-slate-300">
-                      <span className="font-semibold text-slate-800 dark:text-slate-100">Status: </span>
-                      <span className="font-bold text-amber-600 dark:text-amber-300">Under Mentor Review</span>
+                      <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-900/60 rounded-lg border border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">Status:</span>
+                          <select
+                            aria-label={`Change status for ${focusTask.title}`}
+                            value={focusTask.status}
+                            onChange={(e) => handleStatusChange(focusTask.id, e.target.value)}
+                            className="px-2.5 py-1 rounded-md text-xs font-semibold border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                          >
+                            {TASK_STATUS_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <button
+                          onClick={() => openSubmitModal(focusTask)}
+                          className="text-xs font-semibold text-emerald-600 dark:text-emerald-300 hover:underline cursor-pointer"
+                        >
+                          {focusTask.submission_url ? "Update Submission" : "Submit Work"} &rarr;
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">
+                      No tasks assigned yet. Check back once your mentor assigns your first task.
                     </div>
-                    <button
-                      onClick={() => setSubmittingTask(tasks[0])}
-                      className="text-xs font-semibold text-emerald-600 dark:text-emerald-300 hover:underline cursor-pointer"
-                    >
-                      Update Submission &rarr;
-                    </button>
-                  </div>
+                  )}
                 </div>
 
                 {/* Recent Completed Work with Mentor Feedback */}
@@ -479,22 +606,34 @@ const MenteeDashboard = () => {
                   <h3 className="text-base font-bold text-slate-900 dark:text-white mb-3">
                     Recent Evaluation & Feedback
                   </h3>
-                  <div className="border border-slate-100 dark:border-slate-700 rounded-lg p-4 bg-slate-50/50 dark:bg-slate-900/40">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-slate-900 dark:text-white">
-                        State Management with Context API & Reducers
-                      </span>
-                      <span className="font-black text-sm text-emerald-600 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-500/30">
-                        96 / 100
-                      </span>
+                  {recentEvaluatedTask ? (
+                    <div className="border border-slate-100 dark:border-slate-700 rounded-lg p-4 bg-slate-50/50 dark:bg-slate-900/40">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-sm text-slate-900 dark:text-white">
+                          {recentEvaluatedTask.title}
+                        </span>
+                        {recentEvaluatedTask.score !== null && recentEvaluatedTask.score !== undefined ? (
+                          <span className="font-black text-sm text-emerald-600 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-500/30">
+                            {recentEvaluatedTask.score} / 100
+                          </span>
+                        ) : (
+                          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                            {STATUS_LABELS[recentEvaluatedTask.status] || recentEvaluatedTask.status}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-200 mt-2 italic leading-relaxed">
+                        &ldquo;{recentEvaluatedTask.feedback || "No feedback notes provided yet."}&rdquo;
+                      </p>
+                      <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-300 mt-2 text-right">
+                        &bull; Evaluated by {recentEvaluatedTask.evaluator?.name || recentEvaluatedTask.assigner?.name || menteeUser.mentor}
+                      </p>
                     </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-200 mt-2 italic leading-relaxed">
-                      "{tasks[2]?.mentorFeedback}"
-                    </p>
-                    <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-300 mt-2 text-right">
-                      &bull; Evaluated by Amit Sharma
-                    </p>
-                  </div>
+                  ) : (
+                    <div className="py-6 text-center text-xs text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-700 rounded-lg">
+                      No evaluated tasks yet.
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -507,29 +646,34 @@ const MenteeDashboard = () => {
                   </span>
                   <div className="flex items-center gap-3.5">
                     <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-200 flex items-center justify-center font-bold text-base shadow-xs">
-                      AS
+                      {getInitials(menteeUser.mentor)}
                     </div>
                     <div>
                       <h4 className="font-bold text-slate-900 dark:text-white text-sm">{menteeUser.mentor}</h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-300">{menteeUser.mentorEmail}</p>
+                      {menteeUser.mentorEmail && (
+                        <p className="text-xs text-slate-500 dark:text-slate-300">{menteeUser.mentorEmail}</p>
+                      )}
                       <span className="inline-block mt-1 text-[10px] font-semibold text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-200/60 dark:border-indigo-500/30 px-2 py-0.5 rounded">
-                        Lead Engineering Mentor
+                        Assigned Mentor
                       </span>
                     </div>
                   </div>
 
                   <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 space-y-2 text-xs">
                     <div className="flex justify-between">
-                      <span className="text-slate-500 dark:text-slate-300">Supervision Track:</span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-100">React Frontend</span>
+                      <span className="text-slate-500 dark:text-slate-300">Pending Submissions:</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">
+                        {tasks.filter((t) => t.status === "in-progress" || t.status === "needs-revision").length}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500 dark:text-slate-300">Total Tasks Graded:</span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-100">2 Completed</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">
+                        {evaluatedTasks.length} Graded
+                      </span>
                     </div>
                   </div>
                 </div>
-
               </div>
             </div>
           </div>
@@ -547,8 +691,8 @@ const MenteeDashboard = () => {
                 </p>
               </div>
 
-              <div className="flex bg-slate-100 dark:bg-slate-700 p-0.5 rounded-lg text-xs font-medium">
-                {["All", "In Progress", "Submitted", "Completed"].map((filter) => (
+              <div className="flex flex-wrap bg-slate-100 dark:bg-slate-700 p-0.5 rounded-lg text-xs font-medium">
+                {["All", "in-progress", "submitted", "needs-revision", "complete", "hold"].map((filter) => (
                   <button
                     key={filter}
                     onClick={() => setTaskFilter(filter)}
@@ -557,7 +701,7 @@ const MenteeDashboard = () => {
                       : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                       }`}
                   >
-                    {filter}
+                    {filter === "All" ? "All" : STATUS_LABELS[filter] || filter}
                   </button>
                 ))}
               </div>
@@ -571,21 +715,32 @@ const MenteeDashboard = () => {
                   className="p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 hover:shadow-md transition-shadow flex flex-col justify-between"
                 >
                   <div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-200/60 dark:border-indigo-500/30 px-2 py-0.5 rounded">
-                        {task.track}
+                        {CATEGORY_LABELS[task.category] || task.category}
                       </span>
-                      <span
-                        className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                          task.status === "Completed"
-                            ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30"
-                            : task.status === "Submitted"
-                            ? "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30"
-                            : "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30"
+                      <select
+                        aria-label={`Change status for ${task.title}`}
+                        value={task.status}
+                        onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                        className={`text-xs font-bold px-2.5 py-0.5 rounded-full border cursor-pointer focus:outline-none ${
+                          task.status === "complete"
+                            ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30"
+                            : task.status === "submitted"
+                            ? "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30"
+                            : task.status === "needs-revision"
+                            ? "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/30"
+                            : task.status === "hold"
+                            ? "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600"
+                            : "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30"
                         }`}
                       >
-                        {task.status}
-                      </span>
+                        {TASK_STATUS_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <h3 className="font-bold text-slate-900 dark:text-white text-sm mt-3">{task.title}</h3>
@@ -594,16 +749,16 @@ const MenteeDashboard = () => {
                     </p>
 
                     <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-xs text-slate-500 dark:text-slate-300">
-                      <span>Due: {task.dueDate}</span>
-                      <span className="font-bold text-slate-700 dark:text-slate-100">
-                        {task.score !== null ? `Score: ${task.score}/100` : `Priority: ${task.priority}`}
+                      <span>Due: {formatShortDate(task.due_date)} &bull; {task.estimated_hours}h</span>
+                      <span className="font-bold uppercase text-[11px] text-slate-700 dark:text-slate-100">
+                        {task.score !== null && task.score !== undefined ? `Score: ${task.score}/100` : `Priority: ${task.priority}`}
                       </span>
                     </div>
 
-                    {task.submissionUrl && (
-                      <div className="mt-2 text-xs">
+                    {task.submission_url && (
+                      <div className="mt-2 flex flex-wrap gap-3 text-xs">
                         <a
-                          href={task.submissionUrl}
+                          href={task.submission_url}
                           target="_blank"
                           rel="noreferrer"
                           className="text-emerald-600 dark:text-emerald-300 hover:underline flex items-center gap-1 font-mono text-[11px]"
@@ -611,14 +766,24 @@ const MenteeDashboard = () => {
                           <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
                           </svg>
-                          <span>Submitted Repo</span>
+                          <span>Submitted Link</span>
                         </a>
+                        {task.demo_url && (
+                          <a
+                            href={task.demo_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-indigo-600 dark:text-indigo-300 hover:underline font-mono text-[11px]"
+                          >
+                            Live Demo
+                          </a>
+                        )}
                       </div>
                     )}
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                    {task.status === "Completed" ? (
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between gap-2">
+                    {task.status === "complete" ? (
                       <button
                         onClick={() => setViewingFeedbackTask(task)}
                         className="text-xs font-semibold text-emerald-600 dark:text-emerald-300 hover:underline cursor-pointer"
@@ -626,12 +791,22 @@ const MenteeDashboard = () => {
                         View Mentor Notes &rarr;
                       </button>
                     ) : (
-                      <button
-                        onClick={() => setSubmittingTask(task)}
-                        className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold transition-colors cursor-pointer"
-                      >
-                        {task.status === "Submitted" ? "Resubmit / Update Link" : "Submit Code Solution"}
-                      </button>
+                      <>
+                        {task.feedback && (
+                          <button
+                            onClick={() => setViewingFeedbackTask(task)}
+                            className="text-xs font-semibold text-amber-600 dark:text-amber-300 hover:underline cursor-pointer flex-shrink-0"
+                          >
+                            View Notes
+                          </button>
+                        )}
+                        <button
+                          onClick={() => openSubmitModal(task)}
+                          className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          {task.status === "submitted" ? "Resubmit / Update Link" : "Submit Work"}
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -669,67 +844,70 @@ const MenteeDashboard = () => {
 
               {/* Feedback Cards */}
               <div className="space-y-4">
-                {feedbackTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/60 hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-300">
-                          {task.track}
-                        </span>
-                        <h3 className="font-bold text-slate-900 dark:text-white text-sm mt-0.5">
-                          {task.title}
-                        </h3>
+                {feedbackTasks.map((task) => {
+                  const reviewer = task.evaluator?.name || task.assigner?.name || menteeUser.mentor;
+                  return (
+                    <div
+                      key={task.id}
+                      className="p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/60 hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-300">
+                            {CATEGORY_LABELS[task.category] || task.category}
+                          </span>
+                          <h3 className="font-bold text-slate-900 dark:text-white text-sm mt-0.5">
+                            {task.title}
+                          </h3>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-start sm:self-auto">
+                          {task.score !== null && task.score !== undefined ? (
+                            <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30">
+                              Score: {task.score}/100
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30">
+                              {STATUS_LABELS[task.status] || task.status}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2 self-start sm:self-auto">
-                        {task.score !== null ? (
-                          <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30">
-                            Score: {task.score}/100
+                      {/* Mentor Feedback Quote */}
+                      <div className="mt-4 p-4 rounded-lg bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-[10px]">
+                            {getInitials(reviewer)}
+                          </div>
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                            {reviewer} (Mentor)
                           </span>
-                        ) : (
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30">
-                            {task.status}
-                          </span>
+                          <span className="text-[11px] text-slate-400 dark:text-slate-400">&bull; Review Note</span>
+                        </div>
+
+                        <p className="text-xs text-slate-700 dark:text-slate-200 italic leading-relaxed">
+                          &ldquo;{task.feedback || "No feedback written yet."}&rdquo;
+                        </p>
+                      </div>
+
+                      {/* Footer Details */}
+                      <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-300 pt-2">
+                        <span>Due: {formatShortDate(task.due_date)}</span>
+                        {task.submission_url && (
+                          <a
+                            href={task.submission_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-emerald-600 dark:text-emerald-300 hover:underline font-mono text-[11px]"
+                          >
+                            View Submission &rarr;
+                          </a>
                         )}
                       </div>
                     </div>
-
-                    {/* Mentor Feedback Quote */}
-                    <div className="mt-4 p-4 rounded-lg bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-[10px]">
-                          {getInitials(menteeUser.mentor)}
-                        </div>
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                          {menteeUser.mentor} (Lead Mentor)
-                        </span>
-                        <span className="text-[11px] text-slate-400 dark:text-slate-400">&bull; Review Note</span>
-                      </div>
-
-                      <p className="text-xs text-slate-700 dark:text-slate-200 italic leading-relaxed">
-                        "{task.mentorFeedback || task.feedback || "No feedback written yet."}"
-                      </p>
-                    </div>
-
-                    {/* Footer Details */}
-                    <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-300 pt-2">
-                      <span>Due: {task.dueDate}</span>
-                      {task.submissionUrl && (
-                        <a
-                          href={task.submissionUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-emerald-600 dark:text-emerald-300 hover:underline font-mono text-[11px]"
-                        >
-                          View Repository &rarr;
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {feedbackTasks.length === 0 && (
                   <div className="py-12 text-center bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-8">
@@ -762,16 +940,22 @@ const MenteeDashboard = () => {
             </div>
 
             <form onSubmit={handleSubmitTask} className="mt-4 space-y-4">
+              {submitError && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 rounded-lg text-xs font-medium">
+                  {submitError}
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                  GitHub Repository URL
+                  Submission URL (GitHub / Document) <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="url"
                   required
                   placeholder="https://github.com/username/project-repo"
-                  value={submissionForm.repoUrl}
-                  onChange={(e) => setSubmissionForm({ ...submissionForm, repoUrl: e.target.value })}
+                  value={submissionForm.submission_url}
+                  onChange={(e) => setSubmissionForm({ ...submissionForm, submission_url: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                 />
               </div>
@@ -783,8 +967,8 @@ const MenteeDashboard = () => {
                 <input
                   type="url"
                   placeholder="https://my-app.vercel.app"
-                  value={submissionForm.demoUrl}
-                  onChange={(e) => setSubmissionForm({ ...submissionForm, demoUrl: e.target.value })}
+                  value={submissionForm.demo_url}
+                  onChange={(e) => setSubmissionForm({ ...submissionForm, demo_url: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 />
               </div>
@@ -796,8 +980,8 @@ const MenteeDashboard = () => {
                 <textarea
                   rows="3"
                   placeholder="Explain your approach, challenges solved, or testing notes..."
-                  value={submissionForm.notes}
-                  onChange={(e) => setSubmissionForm({ ...submissionForm, notes: e.target.value })}
+                  value={submissionForm.submission_notes}
+                  onChange={(e) => setSubmissionForm({ ...submissionForm, submission_notes: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 />
               </div>
@@ -841,7 +1025,11 @@ const MenteeDashboard = () => {
               <h4 className="font-bold text-slate-900 dark:text-white text-sm">{viewingFeedbackTask.title}</h4>
               <div className="mt-2 flex items-center gap-2">
                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Grade:</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">{viewingFeedbackTask.score}/100</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">
+                  {viewingFeedbackTask.score !== null && viewingFeedbackTask.score !== undefined
+                    ? `${viewingFeedbackTask.score}/100`
+                    : "Pending grade"}
+                </span>
               </div>
 
               <div className="mt-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-700">
@@ -849,7 +1037,7 @@ const MenteeDashboard = () => {
                   Mentor Review Notes
                 </span>
                 <p className="text-xs text-slate-700 dark:text-slate-300 italic leading-relaxed">
-                  "{viewingFeedbackTask.mentorFeedback}"
+                  &ldquo;{viewingFeedbackTask.feedback || "No feedback written yet."}&rdquo;
                 </p>
               </div>
             </div>

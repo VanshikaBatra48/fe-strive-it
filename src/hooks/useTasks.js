@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import taskApi from '../api/taskApi';
 
+const getErrMsg = (err, fallback) =>
+  err?.response?.data?.message || err?.message || fallback;
+
 export const useTasks = (initialFilters = {}, autoFetch = true) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(autoFetch);
@@ -14,7 +17,7 @@ export const useTasks = (initialFilters = {}, autoFetch = true) => {
       setTasks(data);
       return data;
     } catch (err) {
-      setError(err.message || 'Failed to fetch tasks');
+      setError(getErrMsg(err, 'Failed to fetch tasks'));
       return [];
     } finally {
       setLoading(false);
@@ -37,7 +40,7 @@ export const useTasks = (initialFilters = {}, autoFetch = true) => {
         })
         .catch((err) => {
           if (isMounted) {
-            setError(err.message || 'Failed to fetch tasks');
+            setError(getErrMsg(err, 'Failed to fetch tasks'));
             setLoading(false);
           }
         });
@@ -54,8 +57,9 @@ export const useTasks = (initialFilters = {}, autoFetch = true) => {
       setTasks((prev) => [created, ...prev]);
       return { success: true, data: created };
     } catch (err) {
-      setError(err.message || 'Failed to assign task');
-      return { success: false, error: err.message };
+      const msg = getErrMsg(err, 'Failed to assign task');
+      setError(msg);
+      return { success: false, error: msg };
     }
   }, []);
 
@@ -66,8 +70,22 @@ export const useTasks = (initialFilters = {}, autoFetch = true) => {
       setTasks((prev) => prev.map((t) => (t.id === Number(id) ? updated : t)));
       return { success: true, data: updated };
     } catch (err) {
-      setError(err.message || 'Failed to update task');
-      return { success: false, error: err.message };
+      const msg = getErrMsg(err, 'Failed to update task');
+      setError(msg);
+      return { success: false, error: msg };
+    }
+  }, []);
+
+  const updateTaskStatus = useCallback(async (id, status) => {
+    setError(null);
+    try {
+      const updated = await taskApi.updateTaskStatus(id, status);
+      setTasks((prev) => prev.map((t) => (t.id === Number(id) ? updated : t)));
+      return { success: true, data: updated };
+    } catch (err) {
+      const msg = getErrMsg(err, 'Failed to update task status');
+      setError(msg);
+      return { success: false, error: msg };
     }
   }, []);
 
@@ -78,8 +96,9 @@ export const useTasks = (initialFilters = {}, autoFetch = true) => {
       setTasks((prev) => prev.map((t) => (t.id === Number(id) ? updated : t)));
       return { success: true, data: updated };
     } catch (err) {
-      setError(err.message || 'Failed to submit task');
-      return { success: false, error: err.message };
+      const msg = getErrMsg(err, 'Failed to submit task');
+      setError(msg);
+      return { success: false, error: msg };
     }
   }, []);
 
@@ -90,8 +109,9 @@ export const useTasks = (initialFilters = {}, autoFetch = true) => {
       setTasks((prev) => prev.map((t) => (t.id === Number(id) ? updated : t)));
       return { success: true, data: updated };
     } catch (err) {
-      setError(err.message || 'Failed to evaluate task');
-      return { success: false, error: err.message };
+      const msg = getErrMsg(err, 'Failed to evaluate task');
+      setError(msg);
+      return { success: false, error: msg };
     }
   }, []);
 
@@ -102,9 +122,14 @@ export const useTasks = (initialFilters = {}, autoFetch = true) => {
       setTasks((prev) => prev.filter((t) => t.id !== Number(id)));
       return { success: true };
     } catch (err) {
-      setError(err.message || 'Failed to delete task');
-      return { success: false, error: err.message };
+      const msg = getErrMsg(err, 'Failed to delete task');
+      setError(msg);
+      return { success: false, error: msg };
     }
+  }, []);
+
+  const removeTasksByMenteeId = useCallback((menteeId) => {
+    setTasks((prev) => prev.filter((t) => t.mentee_id !== Number(menteeId)));
   }, []);
 
   return {
@@ -115,9 +140,11 @@ export const useTasks = (initialFilters = {}, autoFetch = true) => {
     fetchTasks,
     assignTask,
     updateTask,
+    updateTaskStatus,
     submitTask,
     evaluateTask,
     deleteTask,
+    removeTasksByMenteeId,
     refetch: fetchTasks,
   };
 };

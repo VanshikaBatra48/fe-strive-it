@@ -27,13 +27,21 @@ export const mentorApi = {
   },
 
   /**
-   * Assign a mentee to a mentor
+   * Assign, change, or remove a mentor for a mentee (by mentor ID or legacy mentor name)
    * @param {number|string} menteeId
-   * @param {string} mentorName
+   * @param {number|string|null} mentorIdOrName
    * @returns {Promise<object>}
    */
-  async assignMentee(menteeId, mentorName) {
-    return userApi.updateUser(menteeId, { assigned_to: mentorName });
+  async assignMentee(menteeId, mentorIdOrName) {
+    if (
+      mentorIdOrName === null ||
+      typeof mentorIdOrName === 'number' ||
+      (typeof mentorIdOrName === 'string' && /^\d+$/.test(mentorIdOrName.trim()))
+    ) {
+      const mentorId = mentorIdOrName === null ? null : Number(mentorIdOrName);
+      return userApi.assignMentor(menteeId, mentorId);
+    }
+    return userApi.updateUser(menteeId, { assigned_to: mentorIdOrName || null });
   },
 };
 

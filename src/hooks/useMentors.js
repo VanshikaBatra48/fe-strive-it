@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import mentorApi from '../api/mentorApi';
+import userApi from '../api/userApi';
 import { normalizeUser } from './useUsers';
 
 export const useMentors = (mentorName = null, autoFetch = true) => {
@@ -54,6 +55,26 @@ export const useMentors = (mentorName = null, autoFetch = true) => {
     }
   }, [mentorName, fetchAssignedMentees]);
 
+  const deleteMentee = useCallback(async (id) => {
+    setError(null);
+    try {
+      const res = await userApi.deleteUser(id);
+      if (res?.success) {
+        setAssignedMentees((prev) => prev.filter((m) => m.id !== Number(id)));
+        return {
+          success: true,
+          message: res.message,
+          deletedTasksCount: res.deletedTasksCount ?? 0,
+        };
+      }
+      throw new Error(res?.message || 'Failed to delete mentee');
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to delete mentee';
+      setError(msg);
+      return { success: false, error: msg };
+    }
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
     if (!autoFetch) return;
@@ -88,11 +109,13 @@ export const useMentors = (mentorName = null, autoFetch = true) => {
   return {
     mentors,
     assignedMentees,
+    setAssignedMentees,
     loading,
     error,
     fetchMentors,
     fetchAssignedMentees,
     assignMentee,
+    deleteMentee,
     refetch: fetchMentors,
   };
 };

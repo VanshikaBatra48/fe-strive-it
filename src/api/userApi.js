@@ -7,13 +7,16 @@ export const userApi = {
    * @returns {Promise<{success: boolean, count: number, data: Array}>}
    */
   async getUsers(params = {}) {
-    const response = await apiClient.get('/users', { params });
+    const cleanParams = Object.fromEntries(
+      Object.entries(params).filter(([, v]) => v !== '' && v !== undefined && v !== null)
+    );
+    const response = await apiClient.get('/users', { params: cleanParams });
     return response.data;
   },
 
   /**
    * Create a new user (admin, mentor, mentee)
-   * @param {object} userData { name, email, password, role, assigned_to }
+   * @param {object} userData { name, email, role, status, assigned_to, assignedMentees }
    * @returns {Promise<{success: boolean, message: string, data: object}>}
    */
   async createUser(userData) {
@@ -29,6 +32,19 @@ export const userApi = {
    */
   async updateUser(id, updateData) {
     const response = await apiClient.patch(`/users/update/${id}`, updateData);
+    return response.data;
+  },
+
+  /**
+   * Assign, change, or remove a mentor for a mentee (Admin only)
+   * @param {number|string} menteeId
+   * @param {number|null} mentorId
+   * @returns {Promise<{success: boolean, action: string, message: string, data: object}>}
+   */
+  async assignMentor(menteeId, mentorId) {
+    const response = await apiClient.patch(`/users/${menteeId}/assign-mentor`, {
+      mentor_id: mentorId ?? null,
+    });
     return response.data;
   },
 

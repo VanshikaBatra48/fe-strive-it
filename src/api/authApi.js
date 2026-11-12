@@ -25,7 +25,7 @@ export const authApi = {
   /**
    * Change current user's password (supports first login password setup)
    * @param {string} newPassword
-   * @returns {Promise<{success: boolean, message: string, firstLogin: boolean}>}
+   * @returns {Promise<{success: boolean, message: string, token?: string, user?: object}>}
    */
   async changePassword(newPassword) {
     const response = await apiClient.patch('/users/changepassword', { newPassword });
@@ -37,13 +37,11 @@ export const authApi = {
    * @param {number|string} id
    * @returns {Promise<{success: boolean, message: string}>}
    */
-  // async completeFirstLogin(id) {
-  //   const url = id ? `/users/${id}/complete-first-login` : '/users/complete-first-login';
-  //   console.log("url", url);
-  //   const response = await apiClient.patch(url);
-  //   console.log("response", response);
-  //   return response.data;
-  // },
+  async completeFirstLogin(id) {
+    const url = id ? `/users/${id}/complete-first-login` : '/users/complete-first-login';
+    const response = await apiClient.patch(url);
+    return response.data;
+  },
 };
 
 export default authApi;
