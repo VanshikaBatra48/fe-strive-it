@@ -18,7 +18,7 @@ function timeAgo(dateStr) {
   return new Date(dateStr).toLocaleDateString();
 }
 
-export default function NotificationBell({ role }) {
+export default function NotificationBell({ role, onOpenTask }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const navigate = useNavigate();
@@ -36,10 +36,14 @@ export default function NotificationBell({ role }) {
 
   const handleClick = (n) => {
     if (!n.is_read) markAsRead(n.id);
-    const link = getLink(n, role);
-    if (link) {
-      setOpen(false);
-      navigate(link);
+    setOpen(false);
+    if (onOpenTask) {
+      onOpenTask(n.data?.taskId || n);
+    } else {
+      const link = getLink(n, role);
+      if (link && !link.includes('/tasks/')) {
+        navigate(link);
+      }
     }
   };
 

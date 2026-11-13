@@ -59,7 +59,9 @@ export function NotificationProvider({ token, children }) {
         console.error('Failed to load notifications', err);
       });
 
-    socket.auth = { token };
+    socket.auth = (cb) => {
+      cb({ token: localStorage.getItem('token') });
+    };
     socket.connect();
 
     const onNew = (n) => {
@@ -73,8 +75,19 @@ export function NotificationProvider({ token, children }) {
       if (isMounted) loadInitial();
     };
 
-    const onConnectError = (err) => {
+    const onConnectError = async (err) => {
       console.error('Socket error:', err.message);
+      if (err.message === 'TOKEN_EXPIRED') {
+        try {
+          const { authApi } = await import('../api/authApi');
+          const res = await authApi.refresh();
+          if (res?.accessToken) {
+            socket.connect();
+          }
+        } catch {
+          // If refresh fails, user will be logged out by axios interceptor
+        }
+      }
     };
 
     socket.on('notification:new', onNew);

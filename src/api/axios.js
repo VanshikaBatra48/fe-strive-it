@@ -1,5 +1,6 @@
 import axios from 'axios';
 
+
 // Determine API Base URL dynamically with support for env variables and Wi-Fi hostnames
 export const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_BASE_URL) {
@@ -143,5 +144,8 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export const getAccessToken = () => localStorage.getItem('token');
+
 
 export default apiClient;

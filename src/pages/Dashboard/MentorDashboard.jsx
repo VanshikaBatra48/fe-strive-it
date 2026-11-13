@@ -1,9 +1,12 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef ,useEffect} from "react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../../components/ThemeToggle";
+import NotificationBell from "../../components/NotificationBell";
 import useAuth from "../../hooks/useAuth";
 import useMentors from "../../hooks/useMentors";
 import useTasks from "../../hooks/useTasks";
+import { socket } from "../../lib/socket";
+
 
 function getInitials(name = "") {
   const normalized = typeof name === "string" ? name.trim() : "";
@@ -14,14 +17,6 @@ function getInitials(name = "") {
   }
   return normalized.slice(0, 2).toUpperCase();
 }
-
-const TASK_STATUS_OPTIONS = [
-  { value: "in-progress", label: "In Progress" },
-  { value: "submitted", label: "Submitted" },
-  { value: "needs-revision", label: "Needs Revision" },
-  { value: "complete", label: "Complete" },
-  { value: "hold", label: "On Hold" },
-];
 
 const TASK_CATEGORIES = [
   { value: "upskill", label: "Upskill" },
@@ -81,7 +76,6 @@ const MentorDashboard = () => {
     error: tasksError,
     assignTask,
     evaluateTask,
-    updateTaskStatus,
     deleteTask,
     removeTasksByMenteeId,
     refetch: refetchTasks,
@@ -208,6 +202,12 @@ const MentorDashboard = () => {
     navigate("/");
   };
 
+  const handleOpenTaskFromNotification = () => {
+    setActiveTab("tasks");
+    setTaskFilter("All");
+    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const openAssignModal = (preferredMenteeId = "") => {
     setDateError("");
     setAssignError("");
@@ -216,8 +216,8 @@ const MentorDashboard = () => {
       mentee_id: preferredMenteeId
         ? String(preferredMenteeId)
         : mentees[0]?.id
-        ? String(mentees[0].id)
-        : "",
+          ? String(mentees[0].id)
+          : "",
       start_date: prev.start_date || todayDateString,
       due_date: prev.due_date || todayDateString,
     }));
@@ -342,16 +342,6 @@ const MentorDashboard = () => {
     }
   };
 
-  // Status update handler (Mentor & Mentee can both update status)
-  const handleStatusChange = async (taskId, nextStatus) => {
-    const res = await updateTaskStatus(taskId, nextStatus);
-    if (res.success) {
-      showToast("success", `Task status updated to ${STATUS_LABELS[nextStatus] || nextStatus}`);
-    } else {
-      showToast("error", res.error || "Failed to update task status");
-    }
-  };
-
   // Delete single task
   const handleDeleteTask = async (task) => {
     if (!window.confirm(`Delete task "${task.title}"?`)) return;
@@ -362,6 +352,13 @@ const MentorDashboard = () => {
       showToast("error", res.error || "Failed to delete task");
     }
   };
+
+  useEffect(() => {
+    if (!refetchTasks) return;
+    const onNewNotification = () => refetchTasks();
+    socket.on("notification:new", onNewNotification);
+    return () => socket.off("notification:new", onNewNotification);
+  }, [refetchTasks]);
 
   // Confirm delete mentee + cascade tasks
   const handleConfirmDeleteMentee = async () => {
@@ -417,11 +414,10 @@ const MentorDashboard = () => {
                 setActiveTab("dashboard");
                 mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === "dashboard"
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "dashboard"
                   ? "bg-indigo-600 text-white shadow-xs"
                   : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-              }`}
+                }`}
             >
               <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -434,11 +430,10 @@ const MentorDashboard = () => {
                 setActiveTab("mentees");
                 mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === "mentees"
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "mentees"
                   ? "bg-indigo-600 text-white shadow-xs"
                   : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-              }`}
+                }`}
             >
               <div className="flex items-center gap-3.5">
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
@@ -456,11 +451,10 @@ const MentorDashboard = () => {
                 setActiveTab("tasks");
                 mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === "tasks"
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "tasks"
                   ? "bg-indigo-600 text-white shadow-xs"
                   : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-              }`}
+                }`}
             >
               <div className="flex items-center gap-3.5">
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
@@ -480,16 +474,26 @@ const MentorDashboard = () => {
                 setActiveTab("reports");
                 mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === "reports"
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "reports"
                   ? "bg-indigo-600 text-white shadow-xs"
                   : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-              }`}
+                }`}
             >
               <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
               <span>Performance</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate("/chat")}
+              className="w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60"
+            >
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              <span>Messages</span>
             </button>
           </nav>
         </div>
@@ -532,6 +536,23 @@ const MentorDashboard = () => {
           <div className="flex items-center gap-3 relative">
             {/* Dark Mode Toggle Button */}
             <ThemeToggle />
+
+            {/* Notification Bell */}
+            <NotificationBell role="mentor" onOpenTask={handleOpenTaskFromNotification} />
+
+            {/* Messages Button */}
+            <button
+              type="button"
+              onClick={() => navigate("/chat")}
+              title="Messages"
+              aria-label="Messages"
+              className="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-white bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs hover:shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 text-xs font-semibold"
+            >
+              <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              <span className="hidden sm:inline">Messages</span>
+            </button>
 
             {/* Quick Action Button */}
             <button
@@ -594,11 +615,10 @@ const MentorDashboard = () => {
         {/* Notification Toast */}
         {notification && (
           <div
-            className={`mb-5 p-3.5 rounded-xl text-sm flex items-center justify-between shadow-xs animate-fadeIn border ${
-              notification.type === "error"
+            className={`mb-5 p-3.5 rounded-xl text-sm flex items-center justify-between shadow-xs animate-fadeIn border ${notification.type === "error"
                 ? "bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-300"
                 : "bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2.5">
               {notification.type === "error" ? (
@@ -855,90 +875,89 @@ const MentorDashboard = () => {
                   currentTask: "No active task",
                 };
                 return (
-                <div
-                  key={mentee.id}
-                  className="rounded-xl border border-slate-200/80 dark:border-slate-700/80 p-5 hover:shadow-md transition-shadow bg-white dark:bg-slate-800/80 flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm ${mentee.avatarBg}`}>
-                          {getInitials(mentee.name)}
+                  <div
+                    key={mentee.id}
+                    className="rounded-xl border border-slate-200/80 dark:border-slate-700/80 p-5 hover:shadow-md transition-shadow bg-white dark:bg-slate-800/80 flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm ${mentee.avatarBg}`}>
+                            {getInitials(mentee.name)}
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-slate-900 dark:text-white text-sm">{mentee.name}</h3>
+                            <p className="text-xs text-slate-500 dark:text-slate-300">{mentee.email}</p>
+                            <span className="inline-block mt-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-200/60 dark:border-indigo-500/30 px-2 py-0.5 rounded">
+                              {stats.taskCount} {stats.taskCount === 1 ? "Task" : "Tasks"}
+                            </span>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-bold text-slate-900 dark:text-white text-sm">{mentee.name}</h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-300">{mentee.email}</p>
-                          <span className="inline-block mt-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-200/60 dark:border-indigo-500/30 px-2 py-0.5 rounded">
-                            {stats.taskCount} {stats.taskCount === 1 ? "Task" : "Tasks"}
-                          </span>
-                        </div>
-                      </div>
 
-                      <span
-                        className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${
-                          mentee.status === "Active"
-                            ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
-                            : "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
-                        }`}
-                      >
-                        {mentee.status}
-                      </span>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="mt-5">
-                      <div className="flex justify-between text-xs font-medium text-slate-700 dark:text-slate-200 mb-1">
-                        <span>Task Completion Progress</span>
-                        <span className="font-bold text-indigo-600 dark:text-indigo-300">{stats.progress}%</span>
-                      </div>
-                      <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-500"
-                          style={{ width: `${stats.progress}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Current Task & Completed Info */}
-                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/80 grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-slate-400 dark:text-slate-400 block text-[10px] uppercase font-semibold">Completed</span>
-                        <span className="font-bold text-slate-800 dark:text-slate-100">
-                          {stats.completedCount} / {stats.taskCount}
+                        <span
+                          className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${mentee.status === "Active"
+                              ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
+                              : "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
+                            }`}
+                        >
+                          {mentee.status}
                         </span>
                       </div>
-                      <div>
-                        <span className="text-slate-400 dark:text-slate-400 block text-[10px] uppercase font-semibold">Current Task</span>
-                        <span className="font-medium text-slate-700 dark:text-slate-200 truncate block">{stats.currentTask}</span>
+
+                      {/* Progress Bar */}
+                      <div className="mt-5">
+                        <div className="flex justify-between text-xs font-medium text-slate-700 dark:text-slate-200 mb-1">
+                          <span>Task Completion Progress</span>
+                          <span className="font-bold text-indigo-600 dark:text-indigo-300">{stats.progress}%</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-500"
+                            style={{ width: `${stats.progress}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Current Task & Completed Info */}
+                      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/80 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-slate-400 dark:text-slate-400 block text-[10px] uppercase font-semibold">Completed</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-100">
+                            {stats.completedCount} / {stats.taskCount}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 dark:text-slate-400 block text-[10px] uppercase font-semibold">Current Task</span>
+                          <span className="font-medium text-slate-700 dark:text-slate-200 truncate block">{stats.currentTask}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Actions */}
-                  <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700/80 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
+                    {/* Actions */}
+                    <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700/80 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setViewingMentee(mentee)}
+                          className="px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                        >
+                          View Details
+                        </button>
+                        <button
+                          onClick={() => setDeletingMentee(mentee)}
+                          className="px-2.5 py-1.5 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                          title="Delete mentee and all their assigned tasks"
+                        >
+                          Delete
+                        </button>
+                      </div>
                       <button
-                        onClick={() => setViewingMentee(mentee)}
-                        className="px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                        onClick={() => openAssignModal(mentee.id)}
+                        className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer shadow-xs"
                       >
-                        View Details
-                      </button>
-                      <button
-                        onClick={() => setDeletingMentee(mentee)}
-                        className="px-2.5 py-1.5 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
-                        title="Delete mentee and all their assigned tasks"
-                      >
-                        Delete
+                        + Assign Task
                       </button>
                     </div>
-                    <button
-                      onClick={() => openAssignModal(mentee.id)}
-                      className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer shadow-xs"
-                    >
-                      + Assign Task
-                    </button>
                   </div>
-                </div>
                 );
               })}
 
@@ -971,11 +990,10 @@ const MentorDashboard = () => {
                     <button
                       key={filter}
                       onClick={() => setTaskFilter(filter)}
-                      className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
-                        taskFilter === filter
+                      className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${taskFilter === filter
                           ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-2xs font-bold"
                           : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
-                      }`}
+                        }`}
                     >
                       {filter === "All" ? "All" : STATUS_LABELS[filter] || filter}
                     </button>
@@ -1026,13 +1044,12 @@ const MentorDashboard = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                            task.priority === "high"
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${task.priority === "high"
                               ? "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
                               : task.priority === "medium"
-                              ? "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30"
-                              : "bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-200/60 dark:border-blue-500/30"
-                          }`}
+                                ? "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30"
+                                : "bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-200/60 dark:border-blue-500/30"
+                            }`}
                         >
                           {task.priority}
                         </span>
@@ -1041,28 +1058,20 @@ const MentorDashboard = () => {
                         {formatShortDate(task.due_date)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <select
-                          aria-label={`Change status for ${task.title}`}
-                          value={task.status}
-                          onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${
-                            task.status === "complete"
+                        <span
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold inline-block border ${task.status === "complete"
                               ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-500/30"
                               : task.status === "submitted"
-                              ? "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-500/30"
-                              : task.status === "needs-revision"
-                              ? "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200/60 dark:border-rose-500/30"
-                              : task.status === "hold"
-                              ? "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600"
-                              : "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-200/60 dark:border-blue-500/30"
-                          }`}
+                                ? "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-500/30"
+                                : task.status === "needs-revision"
+                                  ? "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200/60 dark:border-rose-500/30"
+                                  : task.status === "hold"
+                                    ? "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600"
+                                    : "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-200/60 dark:border-blue-500/30"
+                            }`}
                         >
-                          {TASK_STATUS_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
+                          {STATUS_LABELS[task.status] || task.status}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-700 dark:text-slate-100">
                         {task.score !== null && task.score !== undefined ? `${task.score}/100` : "-"}
@@ -1304,11 +1313,10 @@ const MentorDashboard = () => {
                         setDateError("");
                       }
                     }}
-                    className={`w-full px-3 py-2 border rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 dark:[color-scheme:dark] cursor-pointer ${
-                      dateError
+                    className={`w-full px-3 py-2 border rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 dark:[color-scheme:dark] cursor-pointer ${dateError
                         ? "border-rose-400 focus:ring-rose-400/20"
                         : "border-slate-200 dark:border-slate-700 focus:ring-indigo-500/20"
-                    }`}
+                      }`}
                   />
                 </div>
               </div>
@@ -1454,8 +1462,8 @@ const MentorDashboard = () => {
                     onChange={(e) => setEvaluation({ ...evaluation, status: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
                   >
-                    <option value="complete">Approved (Complete)</option>
-                    <option value="needs-revision">Needs Revision</option>
+                    <option value="complete">Approved</option>
+                    <option value="needs-revision">Need Revision</option>
                   </select>
                 </div>
               </div>

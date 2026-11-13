@@ -10,6 +10,8 @@ export const useMentors = (mentorName = null, autoFetch = true) => {
   const [error, setError] = useState(null);
 
   const fetchMentors = useCallback(async () => {
+    // If a mentorName was provided, this is a mentor dashboard; skip fetching mentors
+    if (mentorName) return [];
     try {
       const data = await mentorApi.getMentors();
       const normalized = (data || []).map((m, idx) => normalizeUser(m, idx));
@@ -20,7 +22,7 @@ export const useMentors = (mentorName = null, autoFetch = true) => {
       setError(msg);
       return [];
     }
-  }, []);
+  }, [mentorName]);
 
   const fetchAssignedMentees = useCallback(async (name) => {
     const targetName = name || mentorName;
@@ -82,11 +84,13 @@ export const useMentors = (mentorName = null, autoFetch = true) => {
     const loadData = async () => {
       try {
         const [mentorsData, menteesData] = await Promise.all([
-          mentorApi.getMentors(),
+          mentorName ? Promise.resolve([]) : mentorApi.getMentors(),
           mentorName ? mentorApi.getAssignedMentees(mentorName) : Promise.resolve([]),
         ]);
         if (!isMounted) return;
-        setMentors((mentorsData || []).map((m, idx) => normalizeUser(m, idx)));
+        if (!mentorName) {
+          setMentors((mentorsData || []).map((m, idx) => normalizeUser(m, idx)));
+        }
         if (mentorName) {
           setAssignedMentees((menteesData || []).map((m, idx) => normalizeUser(m, idx)));
         }
