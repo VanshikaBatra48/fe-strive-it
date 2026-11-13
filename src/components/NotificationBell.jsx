@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useNotifications } from '../context/NotificationContext';
+import { useNotifications } from '../hooks/useNotifications';
 import './NotificationBell.css';
 
 // CHANGE: use your real route paths

@@ -22,8 +22,29 @@ export const AuthProvider = ({ children }) => {
 
     async function verifyAuth() {
       const storedToken = localStorage.getItem('token');
+
       if (!storedToken) {
-        if (isMounted) setLoading(false);
+        try {
+          const refreshRes = await authApi.refresh();
+          const refreshedToken = refreshRes?.accessToken || refreshRes?.token;
+          if (isMounted && refreshedToken && refreshRes?.user) {
+            localStorage.setItem('token', refreshedToken);
+            localStorage.setItem('user', JSON.stringify(refreshRes.user));
+            setToken(refreshedToken);
+            setUser(refreshRes.user);
+            setMustChangePassword(Boolean(refreshRes.user.firstLogin));
+          }
+        } catch {
+          if (isMounted) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setToken(null);
+            setUser(null);
+            setMustChangePassword(false);
+          }
+        } finally {
+          if (isMounted) setLoading(false);
+        }
         return;
       }
 
@@ -70,13 +91,27 @@ export const AuthProvider = ({ children }) => {
       setMustChangePassword(true);
     };
 
+    const handleTokenRefreshed = (event) => {
+      const refreshedToken = event.detail?.token;
+      const refreshedUser = event.detail?.user;
+      if (refreshedToken) {
+        setToken(refreshedToken);
+      }
+      if (refreshedUser) {
+        setUser((prev) => ({ ...(prev || {}), ...refreshedUser }));
+        setMustChangePassword(Boolean(refreshedUser.firstLogin));
+      }
+    };
+
     window.addEventListener('auth:unauthorized', handleUnauthorized);
     window.addEventListener('auth:first-login-required', handleFirstLoginRequired);
+    window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
 
     return () => {
       isMounted = false;
       window.removeEventListener('auth:unauthorized', handleUnauthorized);
       window.removeEventListener('auth:first-login-required', handleFirstLoginRequired);
+      window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
     };
   }, []);
 
@@ -84,13 +119,20 @@ export const AuthProvider = ({ children }) => {
     setAuthError(null);
     try {
       const data = await authApi.login(email, password);
-      if (data?.token && data?.user) {
-        localStorage.setItem('token', data.token);
+      const accessToken = data?.accessToken || data?.token;
+
+      if (accessToken && data?.user) {
+        localStorage.setItem('token', accessToken);
         localStorage.setItem('user', JSON.stringify(data.user));
-        setToken(data.token);
+        setToken(accessToken);
         setUser(data.user);
 
-        if (data.user.firstLogin || data.redirectTo === '/changePassword' || data.redirectTo === '/change-password' || data.redirectTo === '/forget-password') {
+        if (
+          data.user.firstLogin ||
+          data.redirectTo === '/changePassword' ||
+          data.redirectTo === '/change-password' ||
+          data.redirectTo === '/forget-password'
+        ) {
           setMustChangePassword(true);
         } else {
           setMustChangePassword(false);
@@ -114,6 +156,22 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setAuthError(null);
     setMustChangePassword(false);
+    return authApi.logout().catch(() => {});
+  }, []);
+
+  const logoutAll = useCallback(async () => {
+    try {
+      await authApi.logoutAll();
+    } catch {
+      // Clear local session state even if the request fails
+    } finally {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setToken(null);
+      setUser(null);
+      setAuthError(null);
+      setMustChangePassword(false);
+    }
   }, []);
 
   const changePassword = useCallback(async (newPassword) => {
@@ -121,9 +179,10 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await authApi.changePassword(newPassword);
       if (data?.success) {
-        if (data.token) {
-          localStorage.setItem('token', data.token);
-          setToken(data.token);
+        const accessToken = data.accessToken || data.token;
+        if (accessToken) {
+          localStorage.setItem('token', accessToken);
+          setToken(accessToken);
         }
         setMustChangePassword(false);
         setUser((prev) => {
@@ -176,6 +235,7 @@ export const AuthProvider = ({ children }) => {
     setMustChangePassword,
     login,
     logout,
+    logoutAll,
     changePassword,
     completeFirstLogin,
   };

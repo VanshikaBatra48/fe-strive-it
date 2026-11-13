@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import NotificationContext from './notificationContextInstance';
 import { socket } from '../lib/socket';
 import {
   fetchNotifications,
@@ -7,76 +8,96 @@ import {
   markAllNotificationsRead,
 } from '../api/notificationApi';
 
-const NotificationContext = createContext(null);
 const PAGE_SIZE = 20;
+
+async function fetchNotificationSnapshot() {
+  const [list, count] = await Promise.all([
+    fetchNotifications(PAGE_SIZE, 0),
+    fetchUnreadCount(),
+  ]);
+  return {
+    list,
+    count,
+    hasMore: list.length === PAGE_SIZE,
+  };
+}
 
 export function NotificationProvider({ token, children }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
 
-  // Load from REST (history + unread count)
+  // Load from REST (used on reconnect and error rollback)
   const loadInitial = useCallback(async () => {
     try {
-      const [list, count] = await Promise.all([
-        fetchNotifications(PAGE_SIZE, 0),
-        fetchUnreadCount(),
-      ]);
-      setNotifications(list);
-      setUnreadCount(count);
-      setHasMore(list.length === PAGE_SIZE);
+      const snapshot = await fetchNotificationSnapshot();
+      setNotifications(snapshot.list);
+      setUnreadCount(snapshot.count);
+      setHasMore(snapshot.hasMore);
     } catch (err) {
       console.error('Failed to load notifications', err);
     }
   }, []);
 
   useEffect(() => {
-    // Logged out: clear everything and disconnect
+    // Logged out: disconnect socket (state is derived as empty when !token)
     if (!token) {
-      setNotifications([]);
-      setUnreadCount(0);
       socket.disconnect();
       return;
     }
 
-    loadInitial();
+    let isMounted = true;
+
+    fetchNotificationSnapshot()
+      .then((snapshot) => {
+        if (!isMounted) return;
+        setNotifications(snapshot.list);
+        setUnreadCount(snapshot.count);
+        setHasMore(snapshot.hasMore);
+      })
+      .catch((err) => {
+        console.error('Failed to load notifications', err);
+      });
 
     socket.auth = { token };
     socket.connect();
 
     const onNew = (n) => {
+      if (!isMounted) return;
       setNotifications((prev) => (prev.some((x) => x.id === n.id) ? prev : [n, ...prev]));
       setUnreadCount((c) => c + 1);
-      // optional toast: toast(n.title)
     };
 
     // After a reconnect, refetch anything missed while offline
-    const onConnect = () => loadInitial();
+    const onConnect = () => {
+      if (isMounted) loadInitial();
+    };
+
+    const onConnectError = (err) => {
+      console.error('Socket error:', err.message);
+    };
 
     socket.on('notification:new', onNew);
     socket.on('connect', onConnect);
-    socket.on('connect_error', (err) => console.error('Socket error:', err.message));
+    socket.on('connect_error', onConnectError);
 
     return () => {
+      isMounted = false;
       socket.off('notification:new', onNew);
       socket.off('connect', onConnect);
-      socket.off('connect_error');
+      socket.off('connect_error', onConnectError);
       socket.disconnect();
     };
   }, [token, loadInitial]);
 
   const markAsRead = useCallback(async (id) => {
-    let wasUnread = false;
+    const wasUnread = notifications.some((n) => n.id === id && !n.is_read);
     setNotifications((prev) =>
-      prev.map((n) => {
-        if (n.id === id && !n.is_read) {
-          wasUnread = true;
-          return { ...n, is_read: true };
-        }
-        return n;
-      })
+      prev.map((n) => (n.id === id && !n.is_read ? { ...n, is_read: true } : n))
     );
-    if (wasUnread) setUnreadCount((c) => Math.max(0, c - 1));
+    if (wasUnread) {
+      setUnreadCount((c) => Math.max(0, c - 1));
+    }
 
     try {
       await markNotificationRead(id);
@@ -84,7 +105,7 @@ export function NotificationProvider({ token, children }) {
       console.error('Failed to mark as read', err);
       loadInitial(); // roll back to server state
     }
-  }, [loadInitial]);
+  }, [notifications, loadInitial]);
 
   const markAllAsRead = useCallback(async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
@@ -107,17 +128,24 @@ export function NotificationProvider({ token, children }) {
     }
   }, [notifications.length]);
 
+  const visibleNotifications = token ? notifications : [];
+  const visibleUnreadCount = token ? unreadCount : 0;
+  const visibleHasMore = token ? hasMore : false;
+
   return (
     <NotificationContext.Provider
-      value={{ notifications, unreadCount, hasMore, markAsRead, markAllAsRead, loadMore }}
+      value={{
+        notifications: visibleNotifications,
+        unreadCount: visibleUnreadCount,
+        hasMore: visibleHasMore,
+        markAsRead,
+        markAllAsRead,
+        loadMore,
+      }}
     >
       {children}
     </NotificationContext.Provider>
   );
 }
 
-export function useNotifications() {
-  const ctx = useContext(NotificationContext);
-  if (!ctx) throw new Error('useNotifications must be used inside NotificationProvider');
-  return ctx;
-}
+export default NotificationProvider;
