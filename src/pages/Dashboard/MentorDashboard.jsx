@@ -1,6 +1,8 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../../components/ThemeToggle";
+import NotificationBell from "../../components/NotificationBell";
+import { socket } from "../../lib/socket";
 import useAuth from "../../hooks/useAuth";
 import useMentors from "../../hooks/useMentors";
 import useTasks from "../../hooks/useTasks";
@@ -45,9 +47,17 @@ const STATUS_LABELS = {
   hold: "On Hold",
 };
 
-function formatShortDate(val) {
+// Shows the due date AND time, e.g. "14 Nov 2026, 6:30 pm"
+function formatDueDateTime(val) {
   if (!val) return "-";
-  return String(val).slice(0, 10);
+  return new Date(val).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
 const MentorDashboard = () => {
@@ -55,7 +65,11 @@ const MentorDashboard = () => {
   const mainRef = useRef(null);
 
   // Today's date string YYYY-MM-DD for date validation
-  const todayDateString = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const todayDateString = useMemo(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split("T")[0];
+  }, []);
 
   // Current logged in mentor details from AuthContext
   const { user: authUser, logout } = useAuth();
@@ -87,6 +101,14 @@ const MentorDashboard = () => {
     refetch: refetchTasks,
   } = useTasks();
 
+
+  useEffect(() => {
+    if (!refetchTasks) return;
+    const onNewNotification = () => refetchTasks();
+    socket.on("notification:new", onNewNotification);
+    return () => socket.off("notification:new", onNewNotification);
+  }, [refetchTasks]);
+
   const [actionLoading, setActionLoading] = useState(false);
   const [notification, setNotification] = useState(null);
 
@@ -114,7 +136,7 @@ const MentorDashboard = () => {
     category: "upskill",
     priority: "medium",
     start_date: todayDateString,
-    due_date: todayDateString,
+    due_date: `${todayDateString}T23:59`,
     estimated_hours: 4,
     description: "",
   });
@@ -208,6 +230,14 @@ const MentorDashboard = () => {
     navigate("/");
   };
 
+
+  const handleOpenTaskFromNotification = (taskId, notificationItem) => {
+    setActiveTab("tasks");
+    // A submission goes straight to the "Submitted" filter so it's easy to grade
+    setTaskFilter(notificationItem?.type === "TASK_SUBMITTED" ? "submitted" : "All");
+    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const openAssignModal = (preferredMenteeId = "") => {
     setDateError("");
     setAssignError("");
@@ -219,7 +249,7 @@ const MentorDashboard = () => {
         ? String(mentees[0].id)
         : "",
       start_date: prev.start_date || todayDateString,
-      due_date: prev.due_date || todayDateString,
+      due_date: prev.due_date || `${todayDateString}T23:59`,
     }));
     setShowAssignModal(true);
   };
@@ -228,6 +258,7 @@ const MentorDashboard = () => {
   const handleAssignTask = async (e) => {
     e.preventDefault();
     setAssignError("");
+    setDateError("");
 
     if (!newTask.title.trim() || newTask.title.trim().length < 3) {
       setAssignError("Title must be at least 3 characters.");
@@ -245,12 +276,12 @@ const MentorDashboard = () => {
       return;
     }
 
-    if (newTask.due_date < todayDateString) {
-      setDateError("Due date cannot be in the past.");
+    if (new Date(newTask.due_date) < new Date()) {
+      setDateError("Due date and time cannot be in the past.");
       return;
     }
 
-    if (newTask.due_date < newTask.start_date) {
+    if (newTask.due_date.slice(0, 10) < newTask.start_date) {
       setDateError("Due date must be on or after the start date.");
       return;
     }
@@ -273,7 +304,7 @@ const MentorDashboard = () => {
       category: newTask.category,
       priority: newTask.priority,
       start_date: newTask.start_date,
-      due_date: newTask.due_date,
+      due_date: new Date(newTask.due_date).toISOString(),
       estimated_hours: estimatedHours,
       description: newTask.description.trim(),
     };
@@ -291,7 +322,7 @@ const MentorDashboard = () => {
         category: "upskill",
         priority: "medium",
         start_date: todayDateString,
-        due_date: todayDateString,
+        due_date: `${todayDateString}T23:59`,
         estimated_hours: 4,
         description: "",
       });
@@ -533,6 +564,9 @@ const MentorDashboard = () => {
             {/* Dark Mode Toggle Button */}
             <ThemeToggle />
 
+            {/* Notification bell */}
+            <NotificationBell onOpenTask={handleOpenTaskFromNotification} />
+
             {/* Quick Action Button */}
             <button
               onClick={() => openAssignModal()}
@@ -571,8 +605,6 @@ const MentorDashboard = () => {
                       Active Mentor
                     </span>
                   </div>
-
-
 
                   <div className="border-t border-slate-100 dark:border-slate-700 pt-1">
                     <button
@@ -769,7 +801,7 @@ const MentorDashboard = () => {
                             </span>
                           </div>
                           <p className="text-xs text-slate-500 dark:text-slate-300 mt-0.5">
-                            Submitted by <span className="font-medium text-slate-700 dark:text-slate-100">{task.mentee?.name || "Mentee"}</span> &bull; Due: {formatShortDate(task.due_date)}
+                            Submitted by <span className="font-medium text-slate-700 dark:text-slate-100">{task.mentee?.name || "Mentee"}</span> &bull; Due: {formatDueDateTime(task.due_date)}
                           </p>
                           {task.submission_url && (
                             <a
@@ -1038,7 +1070,7 @@ const MentorDashboard = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">
-                        {formatShortDate(task.due_date)}
+                        {formatDueDateTime(task.due_date)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <select
@@ -1274,7 +1306,7 @@ const MentorDashboard = () => {
                     onChange={(e) => {
                       const selected = e.target.value;
                       setNewTask({ ...newTask, start_date: selected });
-                      if (selected && newTask.due_date && newTask.due_date < selected) {
+                      if (selected && newTask.due_date && newTask.due_date.slice(0, 10) < selected) {
                         setDateError("Due date must be on or after the start date.");
                       } else {
                         setDateError("");
@@ -1289,16 +1321,16 @@ const MentorDashboard = () => {
                     Due Date <span className="text-rose-500">*</span>
                   </label>
                   <input
-                    type="date"
+                    type="datetime-local"
                     required
-                    min={newTask.start_date || todayDateString}
+                    min={`${newTask.start_date || todayDateString}T00:00`}
                     value={newTask.due_date}
                     onChange={(e) => {
                       const selected = e.target.value;
                       setNewTask({ ...newTask, due_date: selected });
-                      if (selected && selected < todayDateString) {
-                        setDateError("Due date cannot be in the past!");
-                      } else if (selected && newTask.start_date && selected < newTask.start_date) {
+                      if (selected && new Date(selected) < new Date()) {
+                        setDateError("Due date and time cannot be in the past!");
+                      } else if (selected && newTask.start_date && selected.slice(0, 10) < newTask.start_date) {
                         setDateError("Due date must be on or after start date!");
                       } else {
                         setDateError("");
