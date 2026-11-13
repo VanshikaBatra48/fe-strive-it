@@ -1,8 +1,8 @@
-import { useState, useMemo, useRef, useEffect } from "react"; // CHANGED: added useEffect
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../../components/ThemeToggle";
-import NotificationBell from "../../components/NotificationBell"; // NEW
-import { socket } from "../../lib/socket"; // NEW
+import NotificationBell from "../../components/NotificationBell";
+import { socket } from "../../lib/socket";
 import useAuth from "../../hooks/useAuth";
 import useTasks from "../../hooks/useTasks";
 
@@ -38,9 +38,17 @@ const CATEGORY_LABELS = {
   "inhouse-project": "Inhouse Project",
 };
 
-function formatShortDate(val) {
+// Shows the due date AND time, e.g. "14 Nov 2026, 6:30 pm"
+function formatDueDateTime(val) {
   if (!val) return "-";
-  return String(val).slice(0, 10);
+  return new Date(val).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
 const MenteeDashboard = () => {
@@ -73,10 +81,10 @@ const MenteeDashboard = () => {
     error: tasksError,
     submitTask,
     updateTaskStatus,
-    refetch, // NEW: your useTasks hook must return this (see note below the code)
+    refetch,
   } = useTasks();
 
-  // NEW: when a notification arrives over the socket, reload the task list
+
   useEffect(() => {
     if (!refetch) return;
     const onNewNotification = () => refetch();
@@ -186,7 +194,7 @@ const MenteeDashboard = () => {
     });
   };
 
-  // NEW: clicking a notification takes the mentee to the Assignments tab
+
   const handleOpenTaskFromNotification = () => {
     setActiveTab("assignments");
     setTaskFilter("All");
@@ -622,7 +630,7 @@ const MenteeDashboard = () => {
                     </span>
                     {focusTask && (
                       <span className="px-2.5 py-0.5 rounded text-[11px] font-bold bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30">
-                        Due: {formatShortDate(focusTask.due_date)}
+                        Due: {formatDueDateTime(focusTask.due_date)}
                       </span>
                     )}
                   </div>
@@ -854,7 +862,7 @@ const MenteeDashboard = () => {
                     </p>
 
                     <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-xs text-slate-500 dark:text-slate-300">
-                      <span>Due: {formatShortDate(task.due_date)} &bull; {task.estimated_hours}h</span>
+                      <span>Due: {formatDueDateTime(task.due_date)}</span>
                       <span className="font-bold uppercase text-[11px] text-slate-700 dark:text-slate-100">
                         {task.score !== null && task.score !== undefined ? `Score: ${task.score}/100` : `Priority: ${task.priority}`}
                       </span>
@@ -1016,7 +1024,7 @@ const MenteeDashboard = () => {
 
                       {/* Footer Details */}
                       <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-300 pt-2">
-                        <span>Due: {formatShortDate(task.due_date)}</span>
+                        <span>Due: {formatDueDateTime(task.due_date)}</span>
                         {task.submission_url && (
                           <a
                             href={task.submission_url}
