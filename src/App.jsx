@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthProvider";
 import { useAuth } from "./hooks/useAuth";
-import { NotificationProvider } from "./context/NotificationContext";
+import { NotificationProvider } from "./context/NotificationProvider";
 import Login from "./pages/Login";
 import Dashboards from "./pages/Dashboard/Dashboards";
 import ChangePassword from "./pages/ChangePassword";

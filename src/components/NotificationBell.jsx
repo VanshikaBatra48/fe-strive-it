@@ -5,6 +5,15 @@ import './NotificationBell.css';
 
 // CHANGE: use your real route paths
 function getLink(n, role) {
+  // New message notification
+  if (n.type === 'NEW_MESSAGE') {
+    const groupId = n.data?.groupId;
+
+    if (!groupId) return null;
+
+    return `/messages?groupId=${groupId}`;
+  }
+  //Mentee and mentor notification
   const taskId = n.data?.taskId;
   if (!taskId) return null;
   return role === 'mentee' ? `/mentee/tasks/${taskId}` : `/mentor/tasks/${taskId}`;
@@ -35,16 +44,34 @@ export default function NotificationBell({ role, onOpenTask }) {
   }, []);
 
   const handleClick = (n) => {
-    if (!n.is_read) markAsRead(n.id);
-    setOpen(false);
-    if (onOpenTask) {
-      onOpenTask(n.data?.taskId || n);
-    } else {
-      const link = getLink(n, role);
-      if (link && !link.includes('/tasks/')) {
-        navigate(link);
-      }
+    if (!n.is_read) {
+      markAsRead(n.id);
     }
+
+  setOpen(false);
+   if (n.type === 'NEW_MESSAGE') {
+    const groupId = n.data?.groupId;
+
+    if (!groupId) {
+      console.error('Group ID missing from notification');
+      return;
+    }
+
+    navigate(`/chat?groupId=${groupId}`);
+    return;
+  }
+
+  // Handle existing task notifications
+  if (onOpenTask) {
+    onOpenTask(n.data?.taskId || n);
+    return;
+  }
+
+  const link = getLink(n, role);
+
+  if (link) {
+    navigate(link);
+  }
   };
 
   return (

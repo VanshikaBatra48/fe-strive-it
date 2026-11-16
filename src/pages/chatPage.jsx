@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import useAuth from '../hooks/useAuth';
 import ThemeToggle from '../components/ThemeToggle';
 import { chatApi } from '../api/chatApi';
@@ -11,9 +11,13 @@ import '../components/chat/chat.css';
 
 export default function ChatPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const notificationGroupId = searchParams.get('groupId');
   const { user } = useAuth();
   const me = { id: user?.id, role: user?.role, name: user?.name };
   const isManager = me.role === 'admin' || me.role === 'mentor';
+
+const handledNotificationGroupRef = useRef(null);
 
   const [groups, setGroups] = useState([]);
   const [showAll, setShowAll] = useState(false); // admin: list every group for management
@@ -143,12 +147,43 @@ export default function ChatPage() {
 
   // ---------- Actions ----------
   const openGroup = (g) => {
-    setActiveId(g.id);
-    setShowMembers(g.myRole === null); // admin viewing a group they are not in => roster only
-    if (g.myRole === null) return;
-    if (loadedRef.current.has(g.id)) markReadUpTo(g.id, messages[g.id] ?? []);
-    else loadMessages(g.id).catch(() => { });
-  };
+  console.log('Opening group:', g);
+
+  setActiveId(g.id);
+  setShowMembers(g.myRole === null);
+
+  if (g.myRole === null) return;
+
+  if (loadedRef.current.has(g.id)) {
+    markReadUpTo(g.id, messages[g.id] ?? []);
+  } else {
+    loadMessages(g.id).catch((err) => {
+      console.error('Failed to load messages:', err);
+    });
+  }
+};
+
+useEffect(() => {
+  if (!notificationGroupId || groups.length === 0) return;
+
+  if (handledNotificationGroupRef.current === notificationGroupId) {
+    return;
+  }
+
+  const group = groups.find(
+    (g) => Number(g.id) === Number(notificationGroupId)
+  );
+
+  if (!group) {
+    console.error('Group from notification was not found:', notificationGroupId);
+    return;
+  }
+
+  handledNotificationGroupRef.current = notificationGroupId;
+
+  openGroup(group);
+
+}, [notificationGroupId, groups]);
 
   const loadOlder = async () => {
     if (!activeId) return;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import NotificationContext from './notificationContextInstance';
+import NotificationContext from './notificationContext';
 import { socket } from '../lib/socket';
 import {
   fetchNotifications,
@@ -65,10 +65,38 @@ export function NotificationProvider({ token, children }) {
     socket.connect();
 
     const onNew = (n) => {
-      if (!isMounted) return;
-      setNotifications((prev) => (prev.some((x) => x.id === n.id) ? prev : [n, ...prev]));
-      setUnreadCount((c) => c + 1);
-    };
+  if (!isMounted) return;
+
+  // Check whether the user is currently viewing this chat group
+  if (n.type === 'NEW_MESSAGE') {
+    const currentPath = window.location.pathname;
+    const params = new URLSearchParams(window.location.search);
+
+    const currentGroupId = params.get('groupId');
+    const notificationGroupId = n.data?.groupId;
+
+    // If the user is already viewing the group, don't show a notification
+    if (
+      currentPath === '/chat' &&
+      Number(currentGroupId) === Number(notificationGroupId)
+    ) {
+      // Mark the notification as read in the database
+      markNotificationRead(n.id).catch((err) => {
+        console.error('Failed to mark notification as read:', err);
+      });
+
+      return;
+    }
+  }
+
+  // Normal notification handling
+  setNotifications((prev) => {
+    if (prev.some((x) => x.id === n.id)) return prev;
+    return [n, ...prev];
+  });
+
+  setUnreadCount((c) => c + 1);
+};
 
     // After a reconnect, refetch anything missed while offline
     const onConnect = () => {
