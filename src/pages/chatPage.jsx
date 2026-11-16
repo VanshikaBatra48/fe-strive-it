@@ -112,6 +112,14 @@ export default function ChatPage() {
           ),
         };
       });
+
+      setGroups((gs) =>
+        gs.map((g) =>
+          g.id === groupId && g.lastMessage?.id === messageId
+            ? { ...g, lastMessage: { ...g.lastMessage, deleted: true, body: null, attachments: [] } }
+            : g
+        )
+      );
     },
 
     onGroupChanged: () => {

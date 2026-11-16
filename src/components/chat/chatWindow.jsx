@@ -33,7 +33,7 @@ export default function ChatWindow({
     !m.deleted &&
     m.type !== 'system' &&
     !isArchived &&
-    (m.senderId === me.id || group.myRole === 'owner' || me.role === 'admin');
+    (m.senderId === me.id);
 
   // Scroll to bottom only when the NEWEST message changes (not when loading older ones)
   const newestId = messages[messages.length - 1]?.id;

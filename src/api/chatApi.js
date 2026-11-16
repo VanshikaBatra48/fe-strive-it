@@ -24,7 +24,11 @@ export const chatApi = {
     const form = new FormData();
     if (body) form.append('body', body);
     files.forEach((f) => form.append('files', f));
-    return (await apiClient.post(`/chat/groups/${id}/messages`, form)).data.data;
+    return (
+      await apiClient.post(`/chat/groups/${id}/messages`, form, {
+        headers: { 'Content-Type': undefined },
+      })
+    ).data.data;
   },
 
   deleteMessage: async (groupId, messageId) => {
