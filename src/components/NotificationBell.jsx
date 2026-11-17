@@ -35,16 +35,36 @@ export default function NotificationBell({ role, onOpenTask }) {
   }, []);
 
   const handleClick = (n) => {
-    if (!n.is_read) markAsRead(n.id);
-    setOpen(false);
-    if (onOpenTask) {
-      onOpenTask(n.data?.taskId || n);
-    } else {
-      const link = getLink(n, role);
-      if (link && !link.includes('/tasks/')) {
-        navigate(link);
-      }
+     if (!n.is_read) {
+    markAsRead(n.id);
+  }
+
+  setOpen(false);
+
+  // Handle new message notification
+  if (n.type === 'NEW_MESSAGE') {
+    const groupId = n.data?.groupId;
+
+    if (!groupId) {
+      console.error('Group ID missing from notification');
+      return;
     }
+
+    navigate(`/chat?groupId=${groupId}`);
+    return;
+  }
+
+  // Handle existing task notifications
+  if (onOpenTask) {
+    onOpenTask(n.data?.taskId || n);
+    return;
+  }
+
+  const link = getLink(n, role);
+
+  if (link) {
+    navigate(link);
+  }
   };
 
   return (
