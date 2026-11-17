@@ -82,6 +82,7 @@ export function NotificationProvider({ token, children }) {
           const { authApi } = await import('../api/authApi');
           const res = await authApi.refresh();
           if (res?.accessToken) {
+            socket.auth = { token: res.accessToken };
             socket.connect();
           }
         } catch {

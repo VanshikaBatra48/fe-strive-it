@@ -38,11 +38,14 @@ function AdminDashboard() {
 
 
 
-  const handleLogout = () => {
-    logout();
-    navigate("/");
-  };
-
+  const handleLogout = async () => {
+  try {
+    await logout();
+    navigate("/", { replace: true });
+  } catch (error) {
+    console.error("Logout failed:", error);
+  }
+};
   // Search & filter states
   const [mentorSearch, setMentorSearch] = useState("");
   const [mentorFilter, setMentorFilter] = useState("All");
@@ -82,8 +85,7 @@ function AdminDashboard() {
     };
   }, [menteeDropdownOpen]);
 
-  // View, Edit & Assign Mentor Modal states
-  const [viewingUser, setViewingUser] = useState(null);
+  // Edit & Assign Mentor Modal states
   const [editingUser, setEditingUser] = useState(null);
   const [assigningMentee, setAssigningMentee] = useState(null);
   const [selectedMentorId, setSelectedMentorId] = useState("");
@@ -412,7 +414,7 @@ function AdminDashboard() {
           </div>
 
           {/* Navigation Links */}
-          <nav className="px-3 space-y-1 overflow-y-auto flex-1">
+          <nav className="px-3 space-y-1 overflow-y-auto no-scrollbar [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none] flex-1">
             <button
               onClick={() => {
                 setActiveTab("dashboard");
@@ -498,8 +500,8 @@ function AdminDashboard() {
         </div>
       </aside>
 
-      {/* Main Content Area - Scrollable */}
-      <main ref={mainRef} className="flex-1 h-screen overflow-y-auto px-8 py-6">
+      {/* Main Content Area - Scrollable with hidden scrollbar */}
+      <main ref={mainRef} className="flex-1 h-screen overflow-y-auto no-scrollbar [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none] px-8 py-6">
 
         {/* Top Navbar */}
         <div className="flex items-center justify-end gap-3 mb-4 relative">
@@ -722,16 +724,6 @@ function AdminDashboard() {
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
               </select>
-
-              <button
-                type="button"
-                className="border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer transition-colors"
-              >
-                <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                </svg>
-                <span>Filter</span>
-              </button>
             </div>
           </div>
 
@@ -755,6 +747,9 @@ function AdminDashboard() {
                   <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                     Status
                   </th>
+                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                    On Board
+                  </th>
                   <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider w-48 min-w-[190px]">
                     Assigned Mentees
                   </th>
@@ -770,23 +765,16 @@ function AdminDashboard() {
                     className="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors"
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setViewingUser(mentor);
-                        }}
-                        className="flex items-center gap-3 text-left group cursor-pointer focus:outline-none"
-                        title="Click to view mentor details"
-                      >
+                      <div className="flex items-center gap-3 text-left">
                         <div
-                          className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 transition-transform group-hover:scale-105 shadow-2xs ${mentor.avatarBg}`}
+                          className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-2xs ${mentor.avatarBg}`}
                         >
                           {getInitials(mentor.name)}
                         </div>
-                        <span className="text-sm font-semibold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:underline transition-colors">
+                        <span className="text-sm font-semibold text-slate-900 dark:text-white">
                           {mentor.name}
                         </span>
-                      </button>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
                       {mentor.email}
@@ -810,6 +798,17 @@ function AdminDashboard() {
                         {mentor.status}
                       </span>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                          (mentor.on_Board ?? mentor.on_board ?? mentor.onBoard)
+                            ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
+                            : "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30"
+                        }`}
+                      >
+                        {(mentor.on_Board ?? mentor.on_board ?? mentor.onBoard) ? "Completed" : "Pending"}
+                      </span>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap w-48 min-w-[190px]">
                       {(() => {
                         const assignedMentees = mentees.filter((m) =>
@@ -827,14 +826,7 @@ function AdminDashboard() {
                                   ? "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 text-slate-400 dark:text-slate-500 cursor-not-allowed"
                                   : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer shadow-2xs"
                               }`}
-                              onChange={(e) => {
-                                const selected = assignedMentees.find(
-                                  (m) => m.id.toString() === e.target.value
-                                );
-                                if (selected) {
-                                  setViewingUser(selected);
-                                }
-                              }}
+                              onChange={() => {}}
                             >
                               <option value="" disabled>
                                 {assignedMentees.length === 0
@@ -852,41 +844,29 @@ function AdminDashboard() {
                       })()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        {/* View Button */}
-                        <button
-                          onClick={() => {
-                            setViewingUser(mentor);
-                          }}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                          <span>View</span>
-                        </button>
-
+                      <div className="flex items-center gap-1.5">
                         {/* Edit Button */}
                         <button
                           onClick={() => setEditingUser({ ...mentor })}
-                          className="border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Edit User"
+                          aria-label="Edit User"
+                          className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg border border-slate-300 dark:border-slate-700 shadow-2xs transition-colors cursor-pointer"
                         >
-                          <svg className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                           </svg>
-                          <span>Edit</span>
                         </button>
 
                         {/* Delete Button */}
                         <button
                           onClick={() => handleDelete(mentor.id, mentor.name)}
-                          className="border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-500 dark:text-rose-300 px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Delete User"
+                          aria-label="Delete User"
+                          className="p-1.5 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900/60 shadow-2xs transition-colors cursor-pointer"
                         >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
-                          <span>Delete</span>
                         </button>
                       </div>
                     </td>
@@ -895,7 +875,7 @@ function AdminDashboard() {
 
                 {filteredMentors.length === 0 && (
                   <tr>
-                    <td colSpan="7" className="px-6 py-8 text-center text-slate-400 dark:text-slate-400 text-sm">
+                    <td colSpan="8" className="px-6 py-8 text-center text-slate-400 dark:text-slate-400 text-sm">
                       No mentors found matching your search.
                     </td>
                   </tr>
@@ -970,16 +950,6 @@ function AdminDashboard() {
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
               </select>
-
-              <button
-                type="button"
-                className="border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer transition-colors"
-              >
-                <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                </svg>
-                <span>Filter</span>
-              </button>
             </div>
           </div>
 
@@ -1007,6 +977,9 @@ function AdminDashboard() {
                     Status
                   </th>
                   <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                    On Board
+                  </th>
+                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -1020,23 +993,16 @@ function AdminDashboard() {
                     className="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors"
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setViewingUser(mentee);
-                        }}
-                        className="flex items-center gap-3 text-left group cursor-pointer focus:outline-none"
-                        title="Click to view mentee details"
-                      >
+                      <div className="flex items-center gap-3 text-left">
                         <div
-                          className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 transition-transform group-hover:scale-105 shadow-2xs ${mentee.avatarBg}`}
+                          className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-2xs ${mentee.avatarBg}`}
                         >
                           {getInitials(mentee.name)}
                         </div>
-                        <span className="text-sm font-semibold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:underline transition-colors">
+                        <span className="text-sm font-semibold text-slate-900 dark:text-white">
                           {mentee.name}
                         </span>
-                      </button>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
                       {mentee.email}
@@ -1078,54 +1044,53 @@ function AdminDashboard() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                          (mentee.on_Board ?? mentee.on_board ?? mentee.onBoard)
+                            ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
+                            : "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30"
+                        }`}
+                      >
+                        {(mentee.on_Board ?? mentee.on_board ?? mentee.onBoard) ? "Completed" : "Pending"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
                         {/* Assign / Change Mentor Button */}
                         <button
                           type="button"
                           onClick={() => openAssignMentorModal(mentee)}
-                          className="border border-indigo-200 dark:border-indigo-800/70 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-                          title={assignedMentor ? "Change or remove assigned mentor" : "Assign mentor"}
+                          className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg border border-indigo-200 dark:border-indigo-800/60 shadow-2xs transition-colors cursor-pointer"
+                          title={assignedMentor ? `Change Mentor (${assignedMentor.name})` : "Assign Mentor"}
+                          aria-label={assignedMentor ? "Change Mentor" : "Assign Mentor"}
                         >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                           </svg>
-                          <span>{assignedMentor ? "Change Mentor" : "Assign Mentor"}</span>
-                        </button>
-
-                        {/* View Button */}
-                        <button
-                          onClick={() => {
-                            setViewingUser(mentee);
-                          }}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                          <span>View</span>
                         </button>
 
                         {/* Edit Button */}
                         <button
                           onClick={() => setEditingUser({ ...mentee })}
-                          className="border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Edit User"
+                          aria-label="Edit User"
+                          className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg border border-slate-300 dark:border-slate-700 shadow-2xs transition-colors cursor-pointer"
                         >
-                          <svg className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                           </svg>
-                          <span>Edit</span>
                         </button>
 
                         {/* Delete Button */}
                         <button
                           onClick={() => handleDelete(mentee.id, mentee.name)}
-                          className="border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-500 dark:text-rose-300 px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Delete User"
+                          aria-label="Delete User"
+                          className="p-1.5 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900/60 shadow-2xs transition-colors cursor-pointer"
                         >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
-                          <span>Delete</span>
                         </button>
                       </div>
                     </td>
@@ -1135,7 +1100,7 @@ function AdminDashboard() {
 
                 {filteredMentees.length === 0 && (
                   <tr>
-                    <td colSpan="7" className="px-6 py-8 text-center text-slate-400 dark:text-slate-400 text-sm">
+                    <td colSpan="8" className="px-6 py-8 text-center text-slate-400 dark:text-slate-400 text-sm">
                       No mentees found matching your search.
                     </td>
                   </tr>
@@ -1470,88 +1435,6 @@ function AdminDashboard() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* VIEW MODAL */}
-      {viewingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md overflow-hidden text-slate-800 dark:text-slate-100">
-            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">User Details</h3>
-              <button
-                onClick={() => setViewingUser(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl font-bold cursor-pointer"
-              >
-                &times;
-              </button>
-            </div>
-
-            <div className="p-6">
-              <div className="flex items-center gap-4 mb-6">
-                <div
-                  className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-lg ${viewingUser.avatarBg}`}
-                >
-                  {getInitials(viewingUser.name)}
-                </div>
-                <div>
-                  <h4 className="text-lg font-bold text-slate-900 dark:text-white">
-                    {viewingUser.name}
-                  </h4>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">{viewingUser.email}</p>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl p-4 space-y-3 text-sm border border-slate-100 dark:border-slate-700">
-                <div className="flex justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Role:</span>
-                  <span
-                    className={`font-semibold capitalize px-2.5 py-0.5 rounded-full text-xs ${viewingUser.role === "mentor"
-                      ? "bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300"
-                      : "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-                      }`}
-                  >
-                    {viewingUser.role}
-                  </span>
-                </div>
-                {viewingUser.role === "mentee" && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-500 dark:text-slate-400">Assigned Mentor:</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {resolveMenteeMentor(viewingUser)?.name || "Not Assigned"}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Status:</span>
-                  <span
-                    className={`font-semibold capitalize px-2.5 py-0.5 rounded-full text-xs ${
-                      viewingUser.status?.toLowerCase() === "inactive"
-                        ? "bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300"
-                        : "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-                    }`}
-                  >
-                    {viewingUser.status}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Joined Date:</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">
-                    {viewingUser.joinedOn}
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end">
-                <button
-                  onClick={() => setViewingUser(null)}
-                  className="px-4 py-2 bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}

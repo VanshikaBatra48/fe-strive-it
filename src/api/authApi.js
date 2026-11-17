@@ -1,4 +1,4 @@
-import apiClient from './axios';
+import apiClient, { refreshAccessToken } from './axios';
 
 export const authApi = {
   /**
@@ -13,12 +13,12 @@ export const authApi = {
   },
 
   /**
-   * Refresh access token using the httpOnly refresh cookie
+   * Refresh access token using the httpOnly refresh cookie (deduplicated)
    * @returns {Promise<{success: boolean, accessToken: string, token?: string, user: object}>}
    */
   async refresh() {
-    const response = await apiClient.post('/users/refresh');
-    return response.data;
+    const token = await refreshAccessToken();
+    return { success: true, accessToken: token };
   },
 
   /**

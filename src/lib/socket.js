@@ -6,9 +6,14 @@
 import { io } from "socket.io-client";
 import { getApiBaseUrl } from "../api/axios";
 
-// "http://localhost:3000/api" -> "http://localhost:3000"
-const SOCKET_URL = getApiBaseUrl().replace(/\/api\/?$/, "");
+// Normalize socket base URL without trailing /api
+const rawSocketUrl = import.meta.env.VITE_SOCKET_URL || getApiBaseUrl();
+const SOCKET_URL = rawSocketUrl.replace(/\/api\/?$/, "");
 
 export const socket = io(SOCKET_URL, {
   autoConnect: false, // connects after login, from NotificationProvider
+  transports: ["websocket", "polling"],
+  reconnection: true,
+  reconnectionAttempts: 10,
+  reconnectionDelay: 1000,
 });

@@ -12,7 +12,6 @@ const ChangePassword = () => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  //const [skipping, setSkipping] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState(""); 
 
@@ -20,6 +19,7 @@ const ChangePassword = () => {
     e.preventDefault();
     setError("");
     setSuccessMsg("");
+    
 
     if (!newPassword || newPassword.length < 8 || newPassword.length > 72) {
       setError("Password must be between 8 and 72 characters long.");
@@ -33,14 +33,14 @@ const ChangePassword = () => {
 
     setSubmitting(true);
     const res = await changePassword(newPassword);
+
     setSubmitting(false);
 
     if (res.success) {
-      setSuccessMsg("Password updated successfully! Redirecting...");
-      setTimeout(() => {
+        setSuccessMsg("Password updated successfully! Redirecting...");
+
         navigate("/dashboard", { replace: true });
-      }, 1000);
-    } else {
+}   else {
       setError(res.error || "Failed to update password.");
     }
   };
