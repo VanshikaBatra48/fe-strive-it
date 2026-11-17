@@ -5,7 +5,12 @@ import NotificationBell from "../../components/NotificationBell";
 import { socket } from "../../lib/socket";
 import useAuth from "../../hooks/useAuth";
 import useTasks from "../../hooks/useTasks";
+import {
+  submitTaskVersion,
+  getTaskSubmissionHistory,
+} from "../../api/taskSubmissionApi";
 
+import SubmissionStatus from "../../components/taskSubmission/SubmissionStatus";
 // Helper to get 2-letter initials
 
 function getInitials(name = "") {
@@ -24,11 +29,16 @@ const MENTEE_STATUS_OPTIONS = [
 ];
 
 const STATUS_LABELS = {
-  "in-progress": "In Progress",
+   "in-progress": "In Progress",
+  hold: "On Hold",
+  completed: "Completed",
+  changes_requested: "Changes Requested",
+  approved: "Approved",
+
+  // Existing task statuses, for backward compatibility
   submitted: "Submitted",
   "needs-revision": "Needs Revision",
-  complete: "Complete",
-  hold: "On Hold",
+  complete: "Complete"
 };
 
 const CATEGORY_LABELS = {
@@ -79,7 +89,6 @@ const MenteeDashboard = () => {
     tasks: allTasks,
     loading: tasksLoading,
     error: tasksError,
-    submitTask,
     updateTaskStatus,
     refetch,
   } = useTasks();
@@ -114,12 +123,18 @@ const MenteeDashboard = () => {
   const [submittingTask, setSubmittingTask] = useState(null);
   const [viewingFeedbackTask, setViewingFeedbackTask] = useState(null);
 
+  const [submissionHistories, setSubmissionHistories] = useState({});
+  const [historyLoading, setHistoryLoading] = useState({});
+  const [expandedHistory, setExpandedHistory] = useState(null);
+
   // Submission Form State (matches backend PATCH /api/tasks/:id/submit)
   const [submissionForm, setSubmissionForm] = useState({
     submission_url: "",
     demo_url: "",
     submission_notes: "",
   });
+
+
 
   const showToast = (type, message) => {
     setNotification({ type, message });
@@ -215,37 +230,95 @@ const MenteeDashboard = () => {
       return;
     }
     const res = await updateTaskStatus(taskId, nextStatus);
-    if (res.success) {
-      showToast("success", `Task status updated to ${STATUS_LABELS[nextStatus] || nextStatus}`);
-    } else {
-      showToast("error", res.error || "Failed to update task status");
-    }
   };
 
-  // Submit task handler
-  const handleSubmitTask = async (e) => {
-    e.preventDefault();
-    if (!submittingTask) return;
-    setSubmitError("");
+  
 
-    const payload = {
-      submission_url: submissionForm.submission_url.trim(),
-      demo_url: submissionForm.demo_url.trim() || null,
-      submission_notes: submissionForm.submission_notes.trim() || null,
+
+    // Submit task handler - creates a new submission version
+      const handleSubmitTask = async (e) => {
+      e.preventDefault();
+
+      if (!submittingTask) return;
+
+      setSubmitError("");
+      setActionLoading(true);
+
+      try {
+        const payload = {
+          submissionText: submissionForm.submission_notes.trim(),
+          attachmentUrl: submissionForm.submission_url.trim(),
+        };
+
+        const res = await submitTaskVersion(
+          submittingTask.id,
+          payload
+        );
+
+        if (res.success === false) {
+          throw new Error(res.message || res.error || "Submission failed");
+        }
+
+        const taskId = submittingTask.id;
+
+        setSubmittingTask(null);
+
+        setSubmissionForm({
+          submission_url: "",
+          demo_url: "",
+          submission_notes: "",
+        });
+
+        await refetch();
+        await fetchSubmissionHistory(taskId);
+
+        showToast(
+          "success",
+          "Task submitted successfully! Your mentor has been notified."
+        );
+
+      } catch (error) {
+        console.error("Submission error:", error);
+
+        setSubmitError(
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          error.message ||
+          "Failed to submit task"
+        );
+
+      } finally {
+        setActionLoading(false);
+      }
     };
+      
+  
 
-    setActionLoading(true);
-    const res = await submitTask(submittingTask.id, payload);
-    setActionLoading(false);
+  const fetchSubmissionHistory = async (taskId) => {
+  try {
+    setHistoryLoading((prev) => ({
+      ...prev,
+      [taskId]: true,
+    }));
 
-    if (res.success) {
-      setSubmittingTask(null);
-      setSubmissionForm({ submission_url: "", demo_url: "", submission_notes: "" });
-      showToast("success", "Deliverables submitted successfully! Your mentor has been notified.");
-    } else {
-      setSubmitError(res.error || "Failed to submit assignment");
-    }
-  };
+    const result = await getTaskSubmissionHistory(taskId);
+
+    setSubmissionHistories((prev) => ({
+      ...prev,
+      [taskId]: result.submissions || [],
+    }));
+  } catch (error) {
+    console.error("Failed to fetch submission history:", error);
+    showToast("error", "Unable to load submission history");
+  } finally {
+    setHistoryLoading((prev) => ({
+      ...prev,
+      [taskId]: false,
+    }));
+  }
+
+};
+
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#f8fafc] dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
@@ -813,12 +886,98 @@ const MenteeDashboard = () => {
             </div>
 
             {/* Tasks Grid */}
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
+           <div className="p-6 flex flex-col gap-5">
               {filteredTasks.map((task) => (
                 <div
                   key={task.id}
                   className="p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 hover:shadow-md transition-shadow flex flex-col justify-between"
                 >
+                  {/* Submission History */}
+                  <div className="mt-4 border-t border-slate-200 dark:border-slate-700 pt-3">
+
+                    <button
+                      onClick={() => {
+                        const isOpen = expandedHistory === task.id;
+
+                        setExpandedHistory(isOpen ? null : task.id);
+
+                        if (!isOpen && !submissionHistories[task.id]) {
+                          fetchSubmissionHistory(task.id);
+                        }
+                      }}
+                      className="text-xs font-semibold text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
+                    >
+                      {expandedHistory === task.id
+                        ? "Hide Submission History ↑"
+                        : "View Submission History ↓"}
+                    </button>
+
+                    {expandedHistory === task.id && (
+                      <div className="mt-3 space-y-3">
+
+                        {historyLoading[task.id] ? (
+                          <p className="text-xs text-slate-500">
+                            Loading submission history...
+                          </p>
+                        ) : submissionHistories[task.id]?.length > 0 ? (
+
+                          submissionHistories[task.id].map((submission) => (
+                            <div
+                              key={submission.id}
+                              className="p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+
+                                <span className="text-xs font-bold text-slate-800 dark:text-white">
+                                  Version {submission.version}
+                                </span>
+
+                                <SubmissionStatus status={submission.status} />
+
+                              </div>
+
+                              {submission.submissionText && (
+                                <p className="text-xs mt-2 text-slate-600 dark:text-slate-300">
+                                  {submission.submissionText}
+                                </p>
+                              )}
+
+                              {submission.attachmentUrl && (
+                                <a
+                                  href={submission.attachmentUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block mt-2 text-xs text-emerald-600 hover:underline"
+                                >
+                                  View Submission
+                                </a>
+                              )}
+
+                              {submission.mentorFeedback && (
+                                <div className="mt-3 p-2 rounded bg-orange-50 dark:bg-orange-950/30">
+                                  <p className="text-xs font-bold text-orange-700 dark:text-orange-300">
+                                    Mentor Feedback
+                                  </p>
+
+                                  <p className="text-xs mt-1 text-slate-700 dark:text-slate-300">
+                                    {submission.mentorFeedback}
+                                  </p>
+                                </div>
+                              )}
+
+                            </div>
+                          ))
+
+                        ) : (
+                          <p className="text-xs text-slate-500">
+                            No submission history available.
+                          </p>
+                        )}
+
+                      </div>
+                    )}
+
+                  </div>
                   <div>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-200/60 dark:border-indigo-500/30 px-2 py-0.5 rounded">
