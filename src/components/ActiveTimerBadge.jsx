@@ -13,7 +13,7 @@ export default function ActiveTimerBadge({ enabled }) {
       title="Timer running. Click to open the task"
     >
       <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-      <span className="max-w-[160px] truncate">{active.log.task?.title ?? 'Task'}</span>
+      <span className="max-w-40 truncate">{active.log.task?.title ?? 'Task'}</span>
       <span className="font-mono">{formatDuration(elapsedSeconds)}</span>
     </Link>
   );
