@@ -236,63 +236,70 @@ const MenteeDashboard = () => {
 
 
     // Submit task handler - creates a new submission version
-      const handleSubmitTask = async (e) => {
-      e.preventDefault();
-
-      if (!submittingTask) return;
-
-      setSubmitError("");
-      setActionLoading(true);
-
-      try {
-        const payload = {
-          submissionText: submissionForm.submission_notes.trim(),
-          attachmentUrl: submissionForm.submission_url.trim(),
-        };
-
-        const res = await submitTaskVersion(
-          submittingTask.id,
-          payload
-        );
-
-        if (res.success === false) {
-          throw new Error(res.message || res.error || "Submission failed");
-        }
-
-        const taskId = submittingTask.id;
-
-        setSubmittingTask(null);
-
-        setSubmissionForm({
-          submission_url: "",
-          demo_url: "",
-          submission_notes: "",
-        });
-
-        await refetch();
-        await fetchSubmissionHistory(taskId);
-
-        showToast(
-          "success",
-          "Task submitted successfully! Your mentor has been notified."
-        );
-
-      } catch (error) {
-        console.error("Submission error:", error);
-
-        setSubmitError(
-          error.response?.data?.message ||
-          error.response?.data?.error ||
-          error.message ||
-          "Failed to submit task"
-        );
-
-      } finally {
-        setActionLoading(false);
-      }
-    };
       
-  
+const handleSubmitTask = async (e) => {
+  e.preventDefault();
+
+  if (!submittingTask) return;
+
+  const taskId = submittingTask.id;
+
+  setSubmitError("");
+  setActionLoading(true);
+
+  try {
+    const payload = {
+      submissionText: submissionForm.submission_notes.trim(),
+      attachmentUrl: submissionForm.submission_url.trim(),
+    };
+
+    // Validate submission
+    if (!payload.submissionText) {
+      throw new Error("Please enter your submission notes.");
+    }
+
+    if (!payload.attachmentUrl) {
+      throw new Error("Please provide your submission URL.");
+    }
+
+    const res = await submitTaskVersion(taskId, payload);
+
+    if (res.success === false) {
+      throw new Error(res.message || res.error || "Submission failed");
+    }
+
+    // Close modal and reset form
+    setSubmittingTask(null);
+
+    setSubmissionForm({
+      submission_url: "",
+      demo_url: "",
+      submission_notes: "",
+    });
+
+    // Refresh task status and submission history
+    await refetch();
+    await fetchSubmissionHistory(taskId);
+
+    showToast(
+      "success",
+      "Task resubmitted successfully! Your mentor has been notified."
+    );
+
+  } catch (error) {
+    console.error("Submission error:", error);
+
+    setSubmitError(
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to submit task"
+    );
+  } finally {
+    setActionLoading(false);
+  }
+};
+
 
   const fetchSubmissionHistory = async (taskId) => {
   try {

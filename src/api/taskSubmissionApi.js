@@ -26,3 +26,23 @@ export const getTaskSubmissionHistory = async (taskId) => {
 
   return response.data;
 };
+
+// Mentor requests changes on a submission
+export const requestChangesApi = async (submissionId, { feedback, score }) => {
+  const response = await axios.patch(
+    `${API_URL}/submissions/${submissionId}/request-changes`,
+    { feedback, score },
+    { headers: getHeaders() }
+  );
+  return response.data;
+};
+
+// Mentor approves a submission
+export const approveSubmissionApi = async (submissionId, { feedback, score }) => {
+  const response = await axios.patch(
+    `${API_URL}/submissions/${submissionId}/approve`,
+    { feedback, score },
+    { headers: getHeaders() }
+  );
+  return response.data;
+};
