@@ -44,4 +44,9 @@ export const chatApi = {
 
   // Change this to your real "list users" endpoint
   listUsers: async () => (await apiClient.get('/users')).data.data,
+
+  renameGroup: async (id, name) =>
+    (await apiClient.patch(`/chat/groups/${id}`, { name })).data.data,
+  deleteGroup: async (id) =>
+    (await apiClient.delete(`/chat/groups/${id}`)).data,
 };

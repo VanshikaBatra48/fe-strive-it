@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams  } from 'react-router-dom';
 import useAuth from '../hooks/useAuth';
 import ThemeToggle from '../components/ThemeToggle';
 import { chatApi } from '../api/chatApi';
@@ -8,9 +8,12 @@ import ChatWindow from '../components/chat/chatWindow';
 import CreateGroupModal from '../components/chat/createGroupModal';
 import MembersPanel from '../components/chat/membersPanel';
 import '../components/chat/chat.css';
+import { socket } from '../lib/socket';
 
 export default function ChatPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const notificationGroupId = searchParams.get('groupId');
   const { user } = useAuth();
   const me = { id: user?.id, role: user?.role, name: user?.name };
   const isManager = me.role === 'admin' || me.role === 'mentor';
@@ -37,12 +40,20 @@ export default function ChatPage() {
   const loadedRef = useRef(new Set());
   const typingTimers = useRef({});
 
+  const handledNotificationGroupRef = useRef(null);
+
   // ---------- Loading ----------
   const loadGroups = useCallback(async () => {
     const data = await chatApi.listGroups(showAllRef.current);
     setGroups(data);
-    // If the open group disappeared (we were removed), close it
-    setActiveId((a) => (a && data.some((g) => g.id === a) ? a : null));
+    // If the open group disappeared (we were removed or group was deleted), close it
+    setActiveId((a) => {
+      if (a && !data.some((g) => g.id === a)) {
+        setShowMembers(false);
+        return null;
+      }
+      return a;
+    });
   }, []);
 
   const markReadUpTo = useCallback((groupId, list) => {
@@ -150,13 +161,61 @@ export default function ChatPage() {
   });
 
   // ---------- Actions ----------
-  const openGroup = (g) => {
+  const openGroup = useCallback((g) => {
     setActiveId(g.id);
-    setShowMembers(g.myRole === null); // admin viewing a group they are not in => roster only
-    if (g.myRole === null) return;
-    if (loadedRef.current.has(g.id)) markReadUpTo(g.id, messages[g.id] ?? []);
-    else loadMessages(g.id).catch(() => { });
+    setShowMembers(g.myRole === null);
+
+    // Admin viewing a group without membership
+    if (g.myRole === null) {
+      socket.emit('chat:inactive');
+      return;
+    }
+
+    // Tell the backend that this user is viewing this group
+    socket.emit('chat:active', {
+      groupId: g.id,
+    });
+
+    if (loadedRef.current.has(g.id)) {
+      markReadUpTo(g.id, messages[g.id] ?? []);
+    } else {
+      loadMessages(g.id).catch((err) => {
+        console.error('Failed to load messages:', err);
+      });
+    }
+  }, [loadMessages, markReadUpTo, messages]);
+
+  useEffect(() => {
+  console.log('ChatPage opened');
+  console.log('Notification group ID:', notificationGroupId);
+  console.log('Available groups:', groups);
+
+  if (!notificationGroupId || groups.length === 0) return;
+
+  if (handledNotificationGroupRef.current === notificationGroupId) return;
+
+  const group = groups.find(
+    (g) => Number(g.id) === Number(notificationGroupId)
+  );
+
+  console.log('Matched group:', group);
+
+  if (!group) {
+    console.error('Group not found!');
+    return;
+  }
+
+  handledNotificationGroupRef.current = notificationGroupId;
+  setTimeout(() => {
+    openGroup(group);
+  }, 0);
+}, [notificationGroupId, groups, openGroup]);
+
+useEffect(() => {
+  return () => {
+    socket.emit('chat:inactive');
   };
+}, []);
 
   const loadOlder = async () => {
     if (!activeId) return;
@@ -299,6 +358,11 @@ export default function ChatPage() {
             me={me}
             onClose={() => setShowMembers(false)}
             onChanged={() => loadGroups().catch(() => { })}
+            onDeleted={() => {
+              setShowMembers(false);
+              setActiveId(null);
+              loadGroups().catch(() => { });
+            }}
           />
         )}
 

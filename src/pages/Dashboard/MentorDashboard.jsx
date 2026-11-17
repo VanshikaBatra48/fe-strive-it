@@ -1,12 +1,13 @@
-import { useState, useMemo, useRef ,useEffect} from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../../components/ThemeToggle";
 import NotificationBell from "../../components/NotificationBell";
+import TaskTimer from "../../components/TaskTimer";
 import { socket } from "../../lib/socket";
 import useAuth from "../../hooks/useAuth";
 import useMentors from "../../hooks/useMentors";
 import useTasks from "../../hooks/useTasks";
-
+import { formatHours } from "../../utils/formatDuration";
 
 function getInitials(name = "") {
   const normalized = typeof name === "string" ? name.trim() : "";
@@ -53,6 +54,22 @@ function formatDueDateTime(val) {
   });
 }
 
+// Logged hours vs estimate. Turns rose when the task is over its estimate.
+function TaskHours({ task }) {
+  const actual = task.actual_seconds || 0;
+  const over = actual > (task.estimated_hours || 0) * 3600;
+  return (
+    <span
+      className={`font-semibold ${
+        over ? "text-rose-600 dark:text-rose-300" : "text-slate-700 dark:text-slate-100"
+      }`}
+    >
+      {formatHours(actual)}h
+      <span className="font-normal text-slate-400"> / {task.estimated_hours}h</span>
+    </span>
+  );
+}
+
 const MentorDashboard = () => {
   const navigate = useNavigate();
   const mainRef = useRef(null);
@@ -93,7 +110,7 @@ const MentorDashboard = () => {
     refetch: refetchTasks,
   } = useTasks();
 
-
+  // Refetch tasks whenever a new notification arrives
   useEffect(() => {
     if (!refetchTasks) return;
     const onNewNotification = () => refetchTasks();
@@ -221,7 +238,6 @@ const MentorDashboard = () => {
     logout();
     navigate("/");
   };
-
 
   const handleOpenTaskFromNotification = (taskId, notificationItem) => {
     setActiveTab("tasks");
@@ -375,13 +391,6 @@ const MentorDashboard = () => {
       showToast("error", res.error || "Failed to delete task");
     }
   };
-
-  useEffect(() => {
-    if (!refetchTasks) return;
-    const onNewNotification = () => refetchTasks();
-    socket.on("notification:new", onNewNotification);
-    return () => socket.off("notification:new", onNewNotification);
-  }, [refetchTasks]);
 
   // Confirm delete mentee + cascade tasks
   const handleConfirmDeleteMentee = async () => {
@@ -576,8 +585,6 @@ const MentorDashboard = () => {
               </svg>
               <span className="hidden sm:inline">Messages</span>
             </button>
-            {/* Notification bell */}
-            {/* <NotificationBell onOpenTask={handleOpenTaskFromNotification} /> */}
 
             {/* Quick Action Button */}
             <button
@@ -777,6 +784,7 @@ const MentorDashboard = () => {
               </div>
             </div>
 
+
             {/* Submissions Waiting for Review */}
             <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs p-6">
               <div className="flex items-center justify-between mb-4">
@@ -812,7 +820,7 @@ const MentorDashboard = () => {
                             </span>
                           </div>
                           <p className="text-xs text-slate-500 dark:text-slate-300 mt-0.5">
-                            Submitted by <span className="font-medium text-slate-700 dark:text-slate-100">{task.mentee?.name || "Mentee"}</span> &bull; Due: {formatDueDateTime(task.due_date)}
+                            Submitted by <span className="font-medium text-slate-700 dark:text-slate-100">{task.mentee?.name || "Mentee"}</span> &bull; Due: {formatDueDateTime(task.due_date)} &bull; Time: <TaskHours task={task} />
                           </p>
                           {task.submission_url && (
                             <a
@@ -1044,6 +1052,7 @@ const MentorDashboard = () => {
                     <th className="px-6 py-3.5">Mentee</th>
                     <th className="px-6 py-3.5">Priority</th>
                     <th className="px-6 py-3.5">Due Date</th>
+                    <th className="px-6 py-3.5">Time</th>
                     <th className="px-6 py-3.5">Status</th>
                     <th className="px-6 py-3.5">Score</th>
                     <th className="px-6 py-3.5 text-right">Action</th>
@@ -1079,6 +1088,9 @@ const MentorDashboard = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">
                         {formatDueDateTime(task.due_date)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <TaskHours task={task} />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
@@ -1150,7 +1162,7 @@ const MentorDashboard = () => {
 
                   {filteredTasks.length === 0 && (
                     <tr>
-                      <td colSpan="7" className="px-6 py-8 text-center text-slate-400 dark:text-slate-500 text-xs">
+                      <td colSpan="8" className="px-6 py-8 text-center text-slate-400 dark:text-slate-500 text-xs">
                         No tasks found in the database.
                       </td>
                     </tr>
@@ -1406,7 +1418,7 @@ const MentorDashboard = () => {
       {/* MODAL: EVALUATE TASK SUBMISSION */}
       {evaluatingTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-lg w-full p-6 text-slate-800 dark:text-slate-100">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-lg w-full p-6 text-slate-800 dark:text-slate-100 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">Evaluate Code Submission</h3>
@@ -1451,6 +1463,16 @@ const MentorDashboard = () => {
                   <span className="font-semibold">Notes:</span> {evaluatingTask.submission_notes}
                 </p>
               )}
+            </div>
+
+            {/* Read-only time tracking for the mentor */}
+            <div className="mt-4">
+              <TaskTimer
+                key={evaluatingTask.id}
+                taskId={evaluatingTask.id}
+                estimatedHours={evaluatingTask.estimated_hours}
+                canTrack={false}
+              />
             </div>
 
             <form onSubmit={handleEvaluateSubmission} className="mt-4 space-y-4">

@@ -5,9 +5,12 @@ import NotificationBell from "../../components/NotificationBell";
 import { socket } from "../../lib/socket";
 import useAuth from "../../hooks/useAuth";
 import useTasks from "../../hooks/useTasks";
+import { useActiveTimer } from "../../hooks/useActiveTimer";
+import { startTaskTimer, stopTaskTimer, TIMER_CHANGED_EVENT } from "../../api/timeLog";
+import TaskTimer from "../../components/TaskTimer";
+import { formatDuration, formatHours } from "../../utils/formatDuration";
 
 // Helper to get 2-letter initials
-
 function getInitials(name = "") {
   const normalized = typeof name === "string" ? name.trim() : "";
   if (!normalized) return "?";
@@ -51,6 +54,57 @@ function formatDueDateTime(val) {
   });
 }
 
+// Compact per-task time line with quick Start/Stop, used on assignment cards
+function TaskTimeRow({ task, activeTimer, elapsedSeconds, busy, onStart, onStop }) {
+  const runningHere = activeTimer?.log.task_id === task.id;
+  const trackable = task.status === "in-progress" || task.status === "needs-revision";
+  // actual_seconds only counts closed sessions, so add the running one
+  const seconds = (task.actual_seconds || 0) + (runningHere ? elapsedSeconds : 0);
+  const over = seconds > (task.estimated_hours || 0) * 3600;
+
+  return (
+    <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-300">
+      <span className="min-w-0">
+        Time:{" "}
+        <span
+          className={`font-semibold ${
+            over ? "text-rose-600 dark:text-rose-300" : "text-slate-700 dark:text-slate-100"
+          }`}
+        >
+          {formatHours(seconds)}h
+        </span>{" "}
+        / {task.estimated_hours}h
+        {runningHere && (
+          <span className="ml-2 inline-flex items-center gap-1 text-rose-600 dark:text-rose-300 font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+            {formatDuration(elapsedSeconds)}
+          </span>
+        )}
+      </span>
+
+      {trackable &&
+        (runningHere ? (
+          <button
+            disabled={busy}
+            onClick={() => onStop(task.id)}
+            className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-semibold cursor-pointer flex-shrink-0"
+          >
+            Stop
+          </button>
+        ) : (
+          <button
+            disabled={busy || !!activeTimer}
+            title={activeTimer ? "Stop your running timer first" : "Start timer"}
+            onClick={() => onStart(task)}
+            className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold cursor-pointer flex-shrink-0"
+          >
+            Start
+          </button>
+        ))}
+    </div>
+  );
+}
+
 const MenteeDashboard = () => {
   const navigate = useNavigate();
   const mainRef = useRef(null);
@@ -92,6 +146,18 @@ const MenteeDashboard = () => {
     return () => socket.off("notification:new", onNewNotification);
   }, [refetch]);
 
+  // One shared request + ticking clock for the running timer (navbar pill, focus task, cards)
+  const { active: activeTimer, elapsedSeconds } = useActiveTimer(true);
+  const [timerBusy, setTimerBusy] = useState(false);
+
+  // Refresh tasks whenever a timer starts or stops (updates actual_seconds and status)
+  useEffect(() => {
+    if (!refetch) return;
+    const onTimerChanged = () => refetch();
+    window.addEventListener(TIMER_CHANGED_EVENT, onTimerChanged);
+    return () => window.removeEventListener(TIMER_CHANGED_EVENT, onTimerChanged);
+  }, [refetch]);
+
   // Filter tasks strictly for this logged-in mentee from the database
   const tasks = useMemo(() => {
     return allTasks.filter(
@@ -124,6 +190,32 @@ const MenteeDashboard = () => {
   const showToast = (type, message) => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 4000);
+  };
+
+  const notifyTimerChanged = () => window.dispatchEvent(new Event(TIMER_CHANGED_EVENT));
+
+  const handleQuickStart = async (task) => {
+    setTimerBusy(true);
+    try {
+      await startTaskTimer(task.id);
+      notifyTimerChanged();
+    } catch (e) {
+      showToast("error", e?.response?.data?.message || "Could not start the timer");
+    } finally {
+      setTimerBusy(false);
+    }
+  };
+
+  const handleQuickStop = async (taskId) => {
+    setTimerBusy(true);
+    try {
+      await stopTaskTimer(taskId);
+      notifyTimerChanged();
+    } catch (e) {
+      showToast("error", e?.response?.data?.message || "Could not stop the timer");
+    } finally {
+      setTimerBusy(false);
+    }
   };
 
   // Filtered Tasks
@@ -165,14 +257,27 @@ const MenteeDashboard = () => {
   const progressPercentage =
     tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
+  // Total time logged across closed sessions, plus the session running right now
+  const totalLoggedSeconds = useMemo(
+    () =>
+      tasks.reduce((sum, t) => sum + (t.actual_seconds || 0), 0) +
+      (activeTimer ? elapsedSeconds : 0),
+    [tasks, activeTimer, elapsedSeconds]
+  );
+
+  // The task with a running timer always takes focus; otherwise fall back to the usual order
   const focusTask = useMemo(() => {
+    const runningTask = activeTimer
+      ? tasks.find((t) => t.id === activeTimer.log.task_id)
+      : null;
     return (
+      runningTask ||
       tasks.find((t) => t.status === "in-progress" || t.status === "needs-revision") ||
       tasks.find((t) => t.status === "submitted") ||
       tasks[0] ||
       null
     );
-  }, [tasks]);
+  }, [tasks, activeTimer]);
 
   const recentEvaluatedTask = useMemo(() => {
     return tasks.find((t) => Boolean(t.feedback) || t.status === "complete") || null;
@@ -217,6 +322,7 @@ const MenteeDashboard = () => {
     const res = await updateTaskStatus(taskId, nextStatus);
     if (res.success) {
       showToast("success", `Task status updated to ${STATUS_LABELS[nextStatus] || nextStatus}`);
+      notifyTimerChanged(); // backend closes any running timer on hold
     } else {
       showToast("error", res.error || "Failed to update task status");
     }
@@ -242,6 +348,7 @@ const MenteeDashboard = () => {
       setSubmittingTask(null);
       setSubmissionForm({ submission_url: "", demo_url: "", submission_notes: "" });
       showToast("success", "Deliverables submitted successfully! Your mentor has been notified.");
+      notifyTimerChanged(); // backend closes any running timer on submit
     } else {
       setSubmitError(res.error || "Failed to submit assignment");
     }
@@ -373,6 +480,23 @@ const MenteeDashboard = () => {
           </div>
 
           <div className="flex items-center gap-3 relative">
+            {/* Running timer pill: visible from every tab */}
+            {activeTimer && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("dashboard");
+                  mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                title="Timer running. Click to open your focus task"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 text-xs font-semibold cursor-pointer"
+              >
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                <span className="max-w-[140px] truncate">{activeTimer.log.task?.title ?? "Task"}</span>
+                <span className="font-mono">{formatDuration(elapsedSeconds)}</span>
+              </button>
+            )}
+
             {/* Dark Mode Toggle Button */}
             <ThemeToggle />
 
@@ -698,6 +822,15 @@ const MenteeDashboard = () => {
                           </button>
                         )}
                       </div>
+
+                      <div className="mt-4">
+                        <TaskTimer
+                          key={`${focusTask.id}-${focusTask.status}`}
+                          taskId={focusTask.id}
+                          estimatedHours={focusTask.estimated_hours}
+                          canTrack={focusTask.status === "in-progress" || focusTask.status === "needs-revision"}
+                        />
+                      </div>
                     </>
                   ) : (
                     <div className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">
@@ -775,6 +908,12 @@ const MenteeDashboard = () => {
                       <span className="text-slate-500 dark:text-slate-300">Total Tasks Graded:</span>
                       <span className="font-semibold text-slate-800 dark:text-slate-100">
                         {evaluatedTasks.length} Graded
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 dark:text-slate-300">Total Time Logged:</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">
+                        {formatHours(totalLoggedSeconds)}h
                       </span>
                     </div>
                   </div>
@@ -867,6 +1006,15 @@ const MenteeDashboard = () => {
                         {task.score !== null && task.score !== undefined ? `Score: ${task.score}/100` : `Priority: ${task.priority}`}
                       </span>
                     </div>
+
+                    <TaskTimeRow
+                      task={task}
+                      activeTimer={activeTimer}
+                      elapsedSeconds={elapsedSeconds}
+                      busy={timerBusy}
+                      onStart={handleQuickStart}
+                      onStop={handleQuickStop}
+                    />
 
                     {task.submission_url && (
                       <div className="mt-2 flex flex-wrap gap-3 text-xs">
