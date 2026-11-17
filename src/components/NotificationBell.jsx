@@ -41,6 +41,19 @@ export default function NotificationBell({ role, onOpenTask }) {
 
   setOpen(false);
 
+   // Handle group notifications
+  if (n.type === 'GROUP_CREATED' || n.type === 'ADDED_TO_GROUP') {
+    const groupId = n.data?.groupId;
+
+    if (!groupId) {
+      console.error('Group ID missing from notification');
+      return;
+    }
+
+    navigate(`/chat?groupId=${groupId}`);
+    return;
+  }
+
   // Handle new message notification
   if (n.type === 'NEW_MESSAGE') {
     const groupId = n.data?.groupId;
@@ -65,6 +78,19 @@ export default function NotificationBell({ role, onOpenTask }) {
   if (link) {
     navigate(link);
   }
+
+
+const handleNotificationClick = (notification) => {
+  const { type, data } = notification;
+
+  if (type === 'GROUP_CREATED' || type === 'ADDED_TO_GROUP') {
+    const groupId = data?.groupId;
+
+    if (groupId) {
+      navigate(`/dashboard/chat/${groupId}`);
+    }
+  }
+};
   };
 
   return (
