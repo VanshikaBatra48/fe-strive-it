@@ -46,8 +46,14 @@ export default function ChatPage() {
   const loadGroups = useCallback(async () => {
     const data = await chatApi.listGroups(showAllRef.current);
     setGroups(data);
-    // If the open group disappeared (we were removed), close it
-    setActiveId((a) => (a && data.some((g) => g.id === a) ? a : null));
+    // If the open group disappeared (we were removed or group was deleted), close it
+    setActiveId((a) => {
+      if (a && !data.some((g) => g.id === a)) {
+        setShowMembers(false);
+        return null;
+      }
+      return a;
+    });
   }, []);
 
   const markReadUpTo = useCallback((groupId, list) => {
@@ -155,29 +161,29 @@ export default function ChatPage() {
   });
 
   // ---------- Actions ----------
-const openGroup = (g) => {
-  setActiveId(g.id);
-  setShowMembers(g.myRole === null);
+  const openGroup = useCallback((g) => {
+    setActiveId(g.id);
+    setShowMembers(g.myRole === null);
 
-  // Admin viewing a group without membership
-  if (g.myRole === null) {
-    socket.emit('chat:inactive');
-    return;
-  }
+    // Admin viewing a group without membership
+    if (g.myRole === null) {
+      socket.emit('chat:inactive');
+      return;
+    }
 
-  // Tell the backend that this user is viewing this group
-  socket.emit('chat:active', {
-    groupId: g.id,
-  });
-
-  if (loadedRef.current.has(g.id)) {
-    markReadUpTo(g.id, messages[g.id] ?? []);
-  } else {
-    loadMessages(g.id).catch((err) => {
-      console.error('Failed to load messages:', err);
+    // Tell the backend that this user is viewing this group
+    socket.emit('chat:active', {
+      groupId: g.id,
     });
-  }
-};
+
+    if (loadedRef.current.has(g.id)) {
+      markReadUpTo(g.id, messages[g.id] ?? []);
+    } else {
+      loadMessages(g.id).catch((err) => {
+        console.error('Failed to load messages:', err);
+      });
+    }
+  }, [loadMessages, markReadUpTo, messages]);
 
   useEffect(() => {
   console.log('ChatPage opened');
@@ -200,8 +206,10 @@ const openGroup = (g) => {
   }
 
   handledNotificationGroupRef.current = notificationGroupId;
-  openGroup(group);
-}, [notificationGroupId, groups]);
+  setTimeout(() => {
+    openGroup(group);
+  }, 0);
+}, [notificationGroupId, groups, openGroup]);
 
 useEffect(() => {
   return () => {
@@ -350,6 +358,11 @@ useEffect(() => {
             me={me}
             onClose={() => setShowMembers(false)}
             onChanged={() => loadGroups().catch(() => { })}
+            onDeleted={() => {
+              setShowMembers(false);
+              setActiveId(null);
+              loadGroups().catch(() => { });
+            }}
           />
         )}
 

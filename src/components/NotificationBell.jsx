@@ -78,20 +78,7 @@ export default function NotificationBell({ role, onOpenTask }) {
   if (link) {
     navigate(link);
   }
-
-
-const handleNotificationClick = (notification) => {
-  const { type, data } = notification;
-
-  if (type === 'GROUP_CREATED' || type === 'ADDED_TO_GROUP') {
-    const groupId = data?.groupId;
-
-    if (groupId) {
-      navigate(`/dashboard/chat/${groupId}`);
-    }
-  }
 };
-  };
 
   return (
     <div className="notif" ref={ref}>
