@@ -32,7 +32,7 @@ export default function TaskTimer({ taskId, estimatedHours, taskStatus, canTrack
       </div>
 
       {/* Live clock */}
-      {t.isRunning && (
+      {t.isRunning && !locked && (
         <div className="text-center">
           <div className="font-mono text-3xl">{formatDuration(t.sessionSeconds)}</div>
           <div className="text-xs text-gray-500">current session</div>

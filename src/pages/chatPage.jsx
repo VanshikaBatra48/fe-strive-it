@@ -29,9 +29,7 @@ export default function ChatPage() {
 
   // Refs so socket callbacks (created once) always see current values
   const activeIdRef = useRef(null);
-  // activeIdRef.current = activeId;
   const showAllRef = useRef(false);
-  // showAllRef.current = showAll;
 
   useEffect(() => {
     activeIdRef.current = activeId;
@@ -185,37 +183,32 @@ export default function ChatPage() {
     }
   }, [loadMessages, markReadUpTo, messages]);
 
+  // Open the group from a notification link (?groupId=...)
   useEffect(() => {
-  console.log('ChatPage opened');
-  console.log('Notification group ID:', notificationGroupId);
-  console.log('Available groups:', groups);
+    if (!notificationGroupId || groups.length === 0) return;
 
-  if (!notificationGroupId || groups.length === 0) return;
+    if (handledNotificationGroupRef.current === notificationGroupId) return;
 
-  if (handledNotificationGroupRef.current === notificationGroupId) return;
+    const group = groups.find(
+      (g) => Number(g.id) === Number(notificationGroupId)
+    );
 
-  const group = groups.find(
-    (g) => Number(g.id) === Number(notificationGroupId)
-  );
+    if (!group) {
+      console.error('Group not found!');
+      return;
+    }
 
-  console.log('Matched group:', group);
+    handledNotificationGroupRef.current = notificationGroupId;
+    setTimeout(() => {
+      openGroup(group);
+    }, 0);
+  }, [notificationGroupId, groups, openGroup]);
 
-  if (!group) {
-    console.error('Group not found!');
-    return;
-  }
-
-  handledNotificationGroupRef.current = notificationGroupId;
-  setTimeout(() => {
-    openGroup(group);
-  }, 0);
-}, [notificationGroupId, groups, openGroup]);
-
-useEffect(() => {
-  return () => {
-    socket.emit('chat:inactive');
-  };
-}, []);
+  useEffect(() => {
+    return () => {
+      socket.emit('chat:inactive');
+    };
+  }, []);
 
   const loadOlder = async () => {
     if (!activeId) return;
@@ -264,7 +257,7 @@ useEffect(() => {
           </button>
           <div className="h-5 w-px bg-slate-300 dark:bg-slate-600" />
           <h1 className="text-sm sm:text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+            <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
             TMS Messaging & Groups
@@ -275,7 +268,7 @@ useEffect(() => {
           <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
             <span>Signed in as</span>
             <strong className="text-slate-800 dark:text-slate-200">{me.name || 'User'}</strong>
-            <span className="capitalize px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+            <span className="capitalize px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
               {me.role}
             </span>
           </div>
@@ -283,8 +276,8 @@ useEffect(() => {
         </div>
       </header>
 
-      {/* Main Chat Layout */}
-      <div className="chat-layout shadow-xs border border-slate-200 dark:border-slate-700">
+      {/* Main Chat Layout (border and shadow come from chat.css) */}
+      <div className="chat-layout">
         <aside className="chat-sidebar">
           <div className="chat-sidebar-head">
             <strong>Groups</strong>

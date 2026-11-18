@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getTaskTime, startTaskTimer, stopTaskTimer } from '../api/timeLog';
+import { getTaskTime, startTaskTimer, stopTaskTimer, TIMER_CHANGED_EVENT } from '../api/timeLog';
 
 export function useTaskTimer(taskId) {
   const [snapshot, setSnapshot] = useState(null); // { data, fetchedAt }
@@ -65,11 +65,18 @@ export function useTaskTimer(taskId) {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refresh]);
 
+  // Resync when a timer starts, stops, or task is submitted elsewhere
+  useEffect(() => {
+    window.addEventListener(TIMER_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(TIMER_CHANGED_EVENT, refresh);
+  }, [refresh]);
+
   const act = async (fn) => {
     setBusy(true);
     setError(null);
     try {
       await fn();
+      window.dispatchEvent(new Event(TIMER_CHANGED_EVENT));
       await refresh();
     } catch (e) {
       setError(e?.response?.data?.message ?? 'Something went wrong');
