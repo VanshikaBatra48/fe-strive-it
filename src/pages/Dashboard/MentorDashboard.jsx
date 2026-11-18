@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef ,useEffect,Fragment} from "react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../../components/ThemeToggle";
 import NotificationBell from "../../components/NotificationBell";
@@ -8,6 +8,13 @@ import useAuth from "../../hooks/useAuth";
 import useMentors from "../../hooks/useMentors";
 import useTasks from "../../hooks/useTasks";
 import { formatHours } from "../../utils/formatDuration";
+import {
+  approveSubmissionApi,
+  requestChangesApi,
+  getTaskSubmissionHistory,
+} from "../../api/taskSubmissionApi";
+
+import SubmissionStatus from "../../components/taskSubmission/SubmissionStatus";
 
 const ALLOWED_TYPES = [
   "application/pdf",
@@ -186,6 +193,9 @@ const MentorDashboard = () => {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const [submissionHistories, setSubmissionHistories] = useState({});
+  const [historyLoading, setHistoryLoading] = useState({});
+  const [expandedHistory, setExpandedHistory] = useState(null);
 
   // New Task Form (matches backend POST /api/tasks fields)
   const [newTask, setNewTask] = useState({
@@ -401,43 +411,73 @@ const MentorDashboard = () => {
   };
 
   // Evaluate submission handler
-  const handleEvaluateSubmission = async (e) => {
-    e.preventDefault();
-    if (!evaluatingTask) return;
-    setEvalError("");
+const handleEvaluateSubmission = async (e) => {
+  e.preventDefault();
+  if (!evaluatingTask) return;
+  setEvalError("");
 
-    if (!evaluation.feedback.trim()) {
-      setEvalError("Evaluation feedback is required.");
-      return;
-    }
+  if (!evaluation.feedback.trim()) {
+    setEvalError("Evaluation feedback is required.");
+    return;
+  }
+  if (
+    evaluation.status === "complete" &&
+    (evaluation.score === "" || evaluation.score == null)
+  ) {
+    setEvalError("Score (0 - 100) is required when marking a task complete.");
+    return;
+  }
 
-    if (
-      evaluation.status === "complete" &&
-      (evaluation.score === "" || evaluation.score === null || evaluation.score === undefined)
-    ) {
-      setEvalError("Score (0 - 100) is required when marking a task complete.");
-      return;
-    }
-
-    setActionLoading(true);
-    const res = await evaluateTask(evaluatingTask.id, {
-      status: evaluation.status,
-      score:
-        evaluation.score === "" || evaluation.score === null || evaluation.score === undefined
-          ? null
-          : Math.round(Number(evaluation.score)),
-      feedback: evaluation.feedback.trim(),
-    });
-    setActionLoading(false);
-
-    if (res.success) {
-      setEvaluatingTask(null);
-      showToast("success", "Evaluation submitted successfully!");
-    } else {
-      setEvalError(res.error || "Failed to submit evaluation");
-    }
+  const gradedTaskId = evaluatingTask.id;
+  const payload = {
+    feedback: evaluation.feedback.trim(),
+    score:
+      evaluation.score === "" || evaluation.score == null
+        ? null
+        : Math.round(Number(evaluation.score)),
   };
 
+  setActionLoading(true);
+  try {
+    // Always fetch fresh; the cached history may be stale
+    const { submissions = [] } = await getTaskSubmissionHistory(gradedTaskId);
+    const latest = submissions.reduce(
+      (a, b) => (!a || b.version > a.version ? b : a),
+      null
+    );
+
+    if (latest && latest.status === "submitted") {
+      if (evaluation.status === "complete") {
+        await approveSubmissionApi(latest.id, payload);
+      } else if (evaluation.status === "needs-revision") {
+        await requestChangesApi(latest.id, payload);
+      } else {
+        // hold / in-progress etc. have no submission-level equivalent
+        const res = await evaluateTask(gradedTaskId, { status: evaluation.status, ...payload });
+        if (!res.success) throw new Error(res.error || "Failed to submit evaluation");
+      }
+    } else if (!latest) {
+      // Legacy task with no versioned submission
+      const res = await evaluateTask(gradedTaskId, { status: evaluation.status, ...payload });
+      if (!res.success) throw new Error(res.error || "Failed to submit evaluation");
+    } else {
+      throw new Error("The latest submission has already been reviewed.");
+    }
+
+    await refetchTasks;                       // from useTasks
+    setEvaluatingTask(null);
+    if (expandedHistory === gradedTaskId) {
+      await fetchSubmissionHistory(gradedTaskId);
+    }
+    showToast("success", "Evaluation submitted successfully!");
+  } catch (err) {
+    setEvalError(
+      err.response?.data?.message || err.message || "Failed to submit evaluation"
+    );
+  } finally {
+    setActionLoading(false);
+  }
+};
   // Delete single task
   // const handleDeleteTask = async (task) => {
   //   if (!window.confirm(`Delete task "${task.title}"?`)) return;
@@ -473,6 +513,28 @@ const MentorDashboard = () => {
     }
     setActionLoading(false);
   };
+
+  const fetchSubmissionHistory = async (taskId) => {
+  try {
+    setHistoryLoading((prev) => ({ ...prev, [taskId]: true }));
+    const result = await getTaskSubmissionHistory(taskId);
+    setSubmissionHistories((prev) => ({
+      ...prev,
+      [taskId]: result.submissions || [],
+    }));
+  } catch (error) {
+    console.error("Failed to fetch submission history:", error);
+    showToast("error", "Unable to load submission history");
+  } finally {
+    setHistoryLoading((prev) => ({ ...prev, [taskId]: false }));
+  }
+};
+
+const toggleHistory = (taskId) => {
+  const isOpen = expandedHistory === taskId;
+  setExpandedHistory(isOpen ? null : taskId);
+  if (!isOpen) fetchSubmissionHistory(taskId);
+};
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#f8fafc] dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
@@ -1102,7 +1164,7 @@ const MentorDashboard = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700/80 text-xs">
-                  {filteredTasks.map((task) => (
+                  {/* {filteredTasks.map((task) => (
                     <tr key={task.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors">
                       <td className="px-6 py-4 max-w-xs">
                         <div className="flex items-center gap-2">
@@ -1197,11 +1259,180 @@ const MentorDashboard = () => {
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
-                          </button> */}
+                          </button>
+                          <button
+                              onClick={() => toggleHistory(task.id)}
+                              className="text-xs font-semibold text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
+                            >
+                              {/* {expandedHistory === task.id ? "Hide History ↑" : "History ↓"} */}
+                              
+                            {/* </button>
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  ))} */}
+                  {filteredTasks.map((task) => (
+  <Fragment key={task.id}>
+    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors">
+      <td className="px-6 py-4 max-w-xs">
+        <div className="flex items-center gap-2">
+          <p className="font-bold text-slate-900 dark:text-white text-sm">{task.title}</p>
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+            {CATEGORY_LABELS[task.category] || task.category}
+          </span>
+        </div>
+        <p className="text-slate-500 dark:text-slate-300 text-xs line-clamp-1 mt-0.5">{task.description}</p>
+      </td>
+
+      <td className="px-6 py-4 whitespace-nowrap">
+        <span className="font-semibold text-slate-800 dark:text-slate-100">{task.mentee?.name || "Mentee"}</span>
+        <span className="block text-[11px] text-slate-400 dark:text-slate-400">{task.mentee?.email || ""}</span>
+      </td>
+
+      <td className="px-6 py-4 whitespace-nowrap">
+        <span
+          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${task.priority === "high"
+              ? "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
+              : task.priority === "medium"
+                ? "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30"
+                : "bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-200/60 dark:border-blue-500/30"
+            }`}
+        >
+          {task.priority}
+        </span>
+      </td>
+
+      <td className="px-6 py-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">
+        {formatDueDateTime(task.due_date)}
+      </td>
+
+      <td className="px-6 py-4 whitespace-nowrap">
+        <span
+          className={`px-2.5 py-1 rounded-lg text-xs font-semibold inline-block border ${task.status === "complete"
+              ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-500/30"
+              : task.status === "submitted"
+                ? "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-500/30"
+                : task.status === "needs-revision"
+                  ? "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200/60 dark:border-rose-500/30"
+                  : task.status === "hold"
+                    ? "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600"
+                    : "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-200/60 dark:border-blue-500/30"
+            }`}
+        >
+          {STATUS_LABELS[task.status] || task.status}
+        </span>
+      </td>
+
+      <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-700 dark:text-slate-100">
+        {task.score !== null && task.score !== undefined ? `${task.score}/100` : "-"}
+      </td>
+
+      <td className="px-6 py-4 whitespace-nowrap text-right">
+        <div className="inline-flex items-center gap-2 justify-end">
+          {task.status === "submitted" || (task.status === "needs-revision" && task.submission_url) ? (
+            <button
+              onClick={() => {
+                setEvalError("");
+                setEvaluatingTask(task);
+                setEvaluation({
+                  score: task.score ?? 90,
+                  feedback: task.feedback || "",
+                  status: "complete",
+                });
+              }}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Grade & Feedback
+            </button>
+          ) : task.status === "complete" || task.feedback ? (
+            <button
+              onClick={() => {
+                setEvalError("");
+                setEvaluatingTask(task);
+                setEvaluation({
+                  score: task.score ?? "",
+                  feedback: task.feedback || "",
+                  status: task.status === "needs-revision" ? "needs-revision" : "complete",
+                });
+              }}
+              className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-300 font-semibold px-2 py-1 text-xs cursor-pointer"
+            >
+              View Evaluation
+            </button>
+          ) : (
+            <span className="text-slate-400 dark:text-slate-500 italic">Awaiting submission</span>
+          )}
+
+          <button
+            onClick={() => toggleHistory(task.id)}
+            className="text-xs font-semibold text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
+          >
+            {expandedHistory === task.id ? "Hide History ↑" : "History ↓"}
+          </button>
+
+          
+        </div>
+      </td>
+    </tr>
+
+    {/* Expanded Submission History Row */}
+    {expandedHistory === task.id && (
+      <tr className="bg-slate-50/60 dark:bg-slate-900/40">
+        <td colSpan="7" className="px-6 py-4">
+          {historyLoading[task.id] ? (
+            <p className="text-xs text-slate-500">Loading submission history...</p>
+          ) : submissionHistories[task.id]?.length > 0 ? (
+            <div className="space-y-3">
+              {submissionHistories[task.id].map((submission) => (
+                <div
+                  key={submission.id}
+                  className="p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-slate-800 dark:text-white">
+                      Version {submission.version}
+                    </span>
+                    <SubmissionStatus status={submission.status} />
+                  </div>
+
+                  {submission.submissionText && (
+                    <p className="text-xs mt-2 text-slate-600 dark:text-slate-300">
+                      {submission.submissionText}
+                    </p>
+                  )}
+
+                  {submission.attachmentUrl && (
+                    <a
+                      href={submission.attachmentUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block mt-2 text-xs text-indigo-600 dark:text-indigo-300 hover:underline"
+                    >
+                      View Submission
+                    </a>
+                  )}
+
+                  {submission.mentorFeedback && (
+                    <div className="mt-3 p-2 rounded bg-orange-50 dark:bg-orange-950/30">
+                      <p className="text-xs font-bold text-orange-700 dark:text-orange-300">
+                        Mentor Feedback
+                      </p>
+                      <p className="text-xs mt-1 text-slate-700 dark:text-slate-300">
+                        {submission.mentorFeedback}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">No submission history available.</p>
+          )}
+        </td>
+      </tr>
+    )}
+  </Fragment>
+))}
 
                   {filteredTasks.length === 0 && (
                     <tr>
