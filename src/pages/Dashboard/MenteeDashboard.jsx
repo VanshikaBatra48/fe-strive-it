@@ -936,7 +936,7 @@ const handleSubmitTask = async (e) => {
                               <div className="flex items-center justify-between gap-2">
 
                                 <span className="text-xs font-bold text-slate-800 dark:text-white">
-                                  Version {submission.version}
+                                  Submission {submission.version}
                                 </span>
 
                                 <SubmissionStatus status={submission.status} />

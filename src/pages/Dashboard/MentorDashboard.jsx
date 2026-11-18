@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef ,useEffect,Fragment} from "react";
+import { useState, useMemo, useRef, useEffect, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../../components/ThemeToggle";
 import NotificationBell from "../../components/NotificationBell";
@@ -13,7 +13,6 @@ import {
 } from "../../api/taskSubmissionApi";
 
 import SubmissionStatus from "../../components/taskSubmission/SubmissionStatus";
-
 
 function getInitials(name = "") {
   const normalized = typeof name === "string" ? name.trim() : "";
@@ -60,6 +59,44 @@ function formatDueDateTime(val) {
   });
 }
 
+// Works with camelCase or snake_case API responses
+const getSubmissionUrl = (submission, task) =>
+  submission?.attachmentUrl ||
+  submission?.attachment_url ||
+  submission?.submissionUrl ||
+  submission?.submission_url ||
+  task?.submission_url ||
+  "";
+
+const getSubmissionText = (submission, task) =>
+  submission?.submissionText ||
+  submission?.submission_text ||
+  task?.submission_notes ||
+  "";
+
+// Accepts any common API response shape and always returns an array
+const normalizeSubmissions = (response) => {
+  const candidates = [
+    response,
+    response?.submissions,
+    response?.data,
+    response?.data?.submissions,
+    response?.data?.data,
+    response?.result,
+    response?.history,
+  ];
+  for (const c of candidates) {
+    if (Array.isArray(c)) return c;
+  }
+  return [];
+};
+
+const getLatestSubmission = (submissions = []) =>
+  submissions.reduce(
+    (acc, cur) => (!acc || Number(cur.version) > Number(acc.version) ? cur : acc),
+    null
+  );
+
 const MentorDashboard = () => {
   const navigate = useNavigate();
   const mainRef = useRef(null);
@@ -100,7 +137,7 @@ const MentorDashboard = () => {
     refetch: refetchTasks,
   } = useTasks();
 
-
+  // Refresh tasks whenever a new notification arrives (registered once)
   useEffect(() => {
     if (!refetchTasks) return;
     const onNewNotification = () => refetchTasks();
@@ -132,6 +169,11 @@ const MentorDashboard = () => {
   const [historyLoading, setHistoryLoading] = useState({});
   const [expandedHistory, setExpandedHistory] = useState(null);
 
+  // Submission shown inside the evaluation modal
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [submissionLoading, setSubmissionLoading] = useState(false);
+  const evalRequestId = useRef(0);
+
   // New Task Form (matches backend POST /api/tasks fields)
   const [newTask, setNewTask] = useState({
     title: "",
@@ -152,6 +194,54 @@ const MentorDashboard = () => {
     feedback: "",
     status: "complete",
   });
+
+  const closeEvaluationModal = () => {
+    evalRequestId.current += 1; // ignore any in-flight fetch
+    setEvaluatingTask(null);
+    setSelectedSubmission(null);
+    setSubmissionLoading(false);
+    setEvalError("");
+  };
+
+  // overrides lets each button choose the starting form values
+  const openEvaluationModal = async (task, overrides = {}) => {
+    const requestId = ++evalRequestId.current;
+
+    setEvalError("");
+    setEvaluatingTask(task);
+    setSelectedSubmission(null);
+    setEvaluation({
+      score: task.score ?? 90,
+      feedback: task.feedback || "",
+      status: "complete",
+      ...overrides,
+    });
+
+    try {
+      setSubmissionLoading(true);
+      const response = await getTaskSubmissionHistory(task.id);
+      if (requestId !== evalRequestId.current) return; // modal was closed/changed
+
+      console.log("Submission history response:", response);
+      setSelectedSubmission(getLatestSubmission(normalizeSubmissions(response)));
+    } catch (error) {
+      if (requestId !== evalRequestId.current) return;
+      console.error("Error fetching submission:", error);
+      setEvalError("Unable to load mentee submission.");
+    } finally {
+      if (requestId === evalRequestId.current) setSubmissionLoading(false);
+    }
+  };
+
+  // Close the evaluation modal with the Escape key
+  useEffect(() => {
+    if (!evaluatingTask) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") closeEvaluationModal();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [evaluatingTask]);
 
   const showToast = (type, message) => {
     setNotification({ type, message });
@@ -232,7 +322,6 @@ const MentorDashboard = () => {
     logout();
     navigate("/");
   };
-
 
   const handleOpenTaskFromNotification = (taskId, notificationItem) => {
     setActiveTab("tasks");
@@ -338,74 +427,102 @@ const MentorDashboard = () => {
     }
   };
 
-  // Evaluate submission handler
-const handleEvaluateSubmission = async (e) => {
-  e.preventDefault();
-  if (!evaluatingTask) return;
-  setEvalError("");
-
-  if (!evaluation.feedback.trim()) {
-    setEvalError("Evaluation feedback is required.");
-    return;
-  }
-  if (
-    evaluation.status === "complete" &&
-    (evaluation.score === "" || evaluation.score == null)
-  ) {
-    setEvalError("Score (0 - 100) is required when marking a task complete.");
-    return;
-  }
-
-  const gradedTaskId = evaluatingTask.id;
-  const payload = {
-    feedback: evaluation.feedback.trim(),
-    score:
-      evaluation.score === "" || evaluation.score == null
-        ? null
-        : Math.round(Number(evaluation.score)),
+  const fetchSubmissionHistory = async (taskId) => {
+    try {
+      setHistoryLoading((prev) => ({ ...prev, [taskId]: true }));
+      const result = await getTaskSubmissionHistory(taskId);
+      setSubmissionHistories((prev) => ({
+        ...prev,
+        [taskId]: normalizeSubmissions(result),
+      }));
+    } catch (error) {
+      console.error("Failed to fetch submission history:", error);
+      showToast("error", "Unable to load submission history");
+    } finally {
+      setHistoryLoading((prev) => ({ ...prev, [taskId]: false }));
+    }
   };
 
-  setActionLoading(true);
-  try {
-    // Always fetch fresh; the cached history may be stale
-    const { submissions = [] } = await getTaskSubmissionHistory(gradedTaskId);
-    const latest = submissions.reduce(
-      (a, b) => (!a || b.version > a.version ? b : a),
-      null
-    );
+  const toggleHistory = (taskId) => {
+    const isOpen = expandedHistory === taskId;
+    setExpandedHistory(isOpen ? null : taskId);
+    if (!isOpen) fetchSubmissionHistory(taskId);
+  };
 
-    if (latest && latest.status === "submitted") {
-      if (evaluation.status === "complete") {
-        await approveSubmissionApi(latest.id, payload);
-      } else if (evaluation.status === "needs-revision") {
-        await requestChangesApi(latest.id, payload);
-      } else {
-        // hold / in-progress etc. have no submission-level equivalent
+  // Evaluate submission handler
+  const handleEvaluateSubmission = async (e) => {
+    e.preventDefault();
+    if (!evaluatingTask) return;
+    setEvalError("");
+
+    if (!evaluation.feedback.trim()) {
+      setEvalError("Evaluation feedback is required.");
+      return;
+    }
+    if (
+      evaluation.status === "complete" &&
+      (evaluation.score === "" || evaluation.score == null)
+    ) {
+      setEvalError("Score (0 - 100) is required when marking a task complete.");
+      return;
+    }
+
+    const gradedTaskId = evaluatingTask.id;
+    const payload = {
+      feedback: evaluation.feedback.trim(),
+      score:
+        evaluation.score === "" || evaluation.score == null
+          ? null
+          : Math.round(Number(evaluation.score)),
+    };
+
+    setActionLoading(true);
+    try {
+      // Always fetch fresh; the cached history may be stale
+      const historyResponse = await getTaskSubmissionHistory(gradedTaskId);
+      const latest = getLatestSubmission(normalizeSubmissions(historyResponse));
+      const latestStatus = String(latest?.status || "").toLowerCase();
+
+      if (latest && latestStatus === "submitted") {
+        if (evaluation.status === "complete") {
+          await approveSubmissionApi(latest.id, payload);
+        } else if (evaluation.status === "needs-revision") {
+          await requestChangesApi(latest.id, payload);
+        } else {
+          // hold / in-progress etc. have no submission-level equivalent
+          const res = await evaluateTask(gradedTaskId, { status: evaluation.status, ...payload });
+          if (!res.success) throw new Error(res.error || "Failed to submit evaluation");
+        }
+      } else if (!latest) {
+        // Legacy task with no versioned submission
         const res = await evaluateTask(gradedTaskId, { status: evaluation.status, ...payload });
         if (!res.success) throw new Error(res.error || "Failed to submit evaluation");
+      } else {
+        throw new Error("The latest submission has already been reviewed.");
       }
-    } else if (!latest) {
-      // Legacy task with no versioned submission
-      const res = await evaluateTask(gradedTaskId, { status: evaluation.status, ...payload });
-      if (!res.success) throw new Error(res.error || "Failed to submit evaluation");
-    } else {
-      throw new Error("The latest submission has already been reviewed.");
-    }
 
-    await refetchTasks;                       // from useTasks
-    setEvaluatingTask(null);
-    if (expandedHistory === gradedTaskId) {
-      await fetchSubmissionHistory(gradedTaskId);
+      // Success: close the modal FIRST so the UI never feels stuck
+      closeEvaluationModal();
+      showToast("success", "Evaluation submitted successfully!");
+
+      // Refresh in the background; failures here shouldn't affect the grade
+      try {
+        await refetchTasks();
+        if (expandedHistory === gradedTaskId) {
+          await fetchSubmissionHistory(gradedTaskId);
+        }
+      } catch (refreshErr) {
+        console.error("Refresh after evaluation failed:", refreshErr);
+      }
+    } catch (err) {
+      setEvalError(
+        err.response?.data?.message || err.message || "Failed to submit evaluation"
+      );
+    } finally {
+      setActionLoading(false);
     }
-    showToast("success", "Evaluation submitted successfully!");
-  } catch (err) {
-    setEvalError(
-      err.response?.data?.message || err.message || "Failed to submit evaluation"
-    );
-  } finally {
-    setActionLoading(false);
-  }
-};
+  };
+
   // Delete single task
   const handleDeleteTask = async (task) => {
     if (!window.confirm(`Delete task "${task.title}"?`)) return;
@@ -416,13 +533,6 @@ const handleEvaluateSubmission = async (e) => {
       showToast("error", res.error || "Failed to delete task");
     }
   };
-
-  useEffect(() => {
-    if (!refetchTasks) return;
-    const onNewNotification = () => refetchTasks();
-    socket.on("notification:new", onNewNotification);
-    return () => socket.off("notification:new", onNewNotification);
-  }, [refetchTasks]);
 
   // Confirm delete mentee + cascade tasks
   const handleConfirmDeleteMentee = async () => {
@@ -448,28 +558,6 @@ const handleEvaluateSubmission = async (e) => {
     }
     setActionLoading(false);
   };
-
-  const fetchSubmissionHistory = async (taskId) => {
-  try {
-    setHistoryLoading((prev) => ({ ...prev, [taskId]: true }));
-    const result = await getTaskSubmissionHistory(taskId);
-    setSubmissionHistories((prev) => ({
-      ...prev,
-      [taskId]: result.submissions || [],
-    }));
-  } catch (error) {
-    console.error("Failed to fetch submission history:", error);
-    showToast("error", "Unable to load submission history");
-  } finally {
-    setHistoryLoading((prev) => ({ ...prev, [taskId]: false }));
-  }
-};
-
-const toggleHistory = (taskId) => {
-  const isOpen = expandedHistory === taskId;
-  setExpandedHistory(isOpen ? null : taskId);
-  if (!isOpen) fetchSubmissionHistory(taskId);
-};
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#f8fafc] dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
@@ -639,8 +727,6 @@ const toggleHistory = (taskId) => {
               </svg>
               <span className="hidden sm:inline">Messages</span>
             </button>
-            {/* Notification bell */}
-            {/* <NotificationBell onOpenTask={handleOpenTaskFromNotification} /> */}
 
             {/* Quick Action Button */}
             <button
@@ -892,15 +978,7 @@ const toggleHistory = (taskId) => {
                           )}
                         </div>
                         <button
-                          onClick={() => {
-                            setEvalError("");
-                            setEvaluatingTask(task);
-                            setEvaluation({
-                              score: task.score ?? 90,
-                              feedback: task.feedback || "",
-                              status: "complete",
-                            });
-                          }}
+                          onClick={() => openEvaluationModal(task)}
                           className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer flex-shrink-0"
                         >
                           Review & Grade
@@ -1113,280 +1191,170 @@ const toggleHistory = (taskId) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700/80 text-xs">
-                  {/* {filteredTasks.map((task) => (
-                    <tr key={task.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors">
-                      <td className="px-6 py-4 max-w-xs">
-                        <div className="flex items-center gap-2">
-                          <p className="font-bold text-slate-900 dark:text-white text-sm">{task.title}</p>
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                            {CATEGORY_LABELS[task.category] || task.category}
-                          </span>
-                        </div>
-                        <p className="text-slate-500 dark:text-slate-300 text-xs line-clamp-1 mt-0.5">{task.description}</p>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="font-semibold text-slate-800 dark:text-slate-100">{task.mentee?.name || "Mentee"}</span>
-                        <span className="block text-[11px] text-slate-400 dark:text-slate-400">{task.mentee?.email || ""}</span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${task.priority === "high"
-                              ? "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
-                              : task.priority === "medium"
-                                ? "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30"
-                                : "bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-200/60 dark:border-blue-500/30"
-                            }`}
-                        >
-                          {task.priority}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">
-                        {formatDueDateTime(task.due_date)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold inline-block border ${task.status === "complete"
-                              ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-500/30"
-                              : task.status === "submitted"
-                                ? "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-500/30"
-                                : task.status === "needs-revision"
-                                  ? "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200/60 dark:border-rose-500/30"
-                                  : task.status === "hold"
-                                    ? "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600"
-                                    : "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-200/60 dark:border-blue-500/30"
-                            }`}
-                        >
-                          {STATUS_LABELS[task.status] || task.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-700 dark:text-slate-100">
-                        {task.score !== null && task.score !== undefined ? `${task.score}/100` : "-"}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="inline-flex items-center gap-2 justify-end">
-                          {task.status === "submitted" || (task.status === "needs-revision" && task.submission_url) ? (
-                            <button
-                              onClick={() => {
-                                setEvalError("");
-                                setEvaluatingTask(task);
-                                setEvaluation({
-                                  score: task.score ?? 90,
-                                  feedback: task.feedback || "",
-                                  status: "complete",
-                                });
-                              }}
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer"
-                            >
-                              Grade & Feedback
-                            </button>
-                          ) : task.status === "complete" || task.feedback ? (
-                            <button
-                              onClick={() => {
-                                setEvalError("");
-                                setEvaluatingTask(task);
-                                setEvaluation({
-                                  score: task.score ?? "",
-                                  feedback: task.feedback || "",
-                                  status: task.status === "needs-revision" ? "needs-revision" : "complete",
-                                });
-                              }}
-                              className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-300 font-semibold px-2 py-1 text-xs cursor-pointer"
-                            >
-                              View Evaluation
-                            </button>
-                          ) : (
-                            <span className="text-slate-400 dark:text-slate-500 italic">Awaiting submission</span>
-                          )}
-                          <button
-                            onClick={() => handleDeleteTask(task)}
-                            title="Delete task"
-                            className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-md transition-colors cursor-pointer"
+                  {filteredTasks.map((task) => (
+                    <Fragment key={task.id}>
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors">
+                        <td className="px-6 py-4 max-w-xs">
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-slate-900 dark:text-white text-sm">{task.title}</p>
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                              {CATEGORY_LABELS[task.category] || task.category}
+                            </span>
+                          </div>
+                          <p className="text-slate-500 dark:text-slate-300 text-xs line-clamp-1 mt-0.5">{task.description}</p>
+                        </td>
+
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">{task.mentee?.name || "Mentee"}</span>
+                          <span className="block text-[11px] text-slate-400 dark:text-slate-400">{task.mentee?.email || ""}</span>
+                        </td>
+
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${task.priority === "high"
+                                ? "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
+                                : task.priority === "medium"
+                                  ? "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30"
+                                  : "bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-200/60 dark:border-blue-500/30"
+                              }`}
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                          <button
+                            {task.priority}
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">
+                          {formatDueDateTime(task.due_date)}
+                        </td>
+
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold inline-block border ${task.status === "complete"
+                                ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-500/30"
+                                : task.status === "submitted"
+                                  ? "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-500/30"
+                                  : task.status === "needs-revision"
+                                    ? "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200/60 dark:border-rose-500/30"
+                                    : task.status === "hold"
+                                      ? "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600"
+                                      : "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-200/60 dark:border-blue-500/30"
+                              }`}
+                          >
+                            {STATUS_LABELS[task.status] || task.status}
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-700 dark:text-slate-100">
+                          {task.score !== null && task.score !== undefined ? `${task.score}/100` : "-"}
+                        </td>
+
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="inline-flex items-center gap-2 justify-end">
+                            {task.status === "submitted" || (task.status === "needs-revision" && task.submission_url) ? (
+                              <button
+                                onClick={() => openEvaluationModal(task)}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer"
+                              >
+                                Grade & Feedback
+                              </button>
+                            ) : task.status === "complete" || task.feedback ? (
+                              <button
+                                onClick={() =>
+                                  openEvaluationModal(task, {
+                                    score: task.score ?? "",
+                                    status: task.status === "needs-revision" ? "needs-revision" : "complete",
+                                  })
+                                }
+                                className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-300 font-semibold px-2 py-1 text-xs cursor-pointer"
+                              >
+                                View Evaluation
+                              </button>
+                            ) : (
+                              <span className="text-slate-400 dark:text-slate-500 italic">Awaiting submission</span>
+                            )}
+
+                            <button
                               onClick={() => toggleHistory(task.id)}
                               className="text-xs font-semibold text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
                             >
-                              {/* {expandedHistory === task.id ? "Hide History ↑" : "History ↓"} */}
-                              
-                            {/* </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))} */}
-                  {filteredTasks.map((task) => (
-  <Fragment key={task.id}>
-    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors">
-      <td className="px-6 py-4 max-w-xs">
-        <div className="flex items-center gap-2">
-          <p className="font-bold text-slate-900 dark:text-white text-sm">{task.title}</p>
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-            {CATEGORY_LABELS[task.category] || task.category}
-          </span>
-        </div>
-        <p className="text-slate-500 dark:text-slate-300 text-xs line-clamp-1 mt-0.5">{task.description}</p>
-      </td>
+                              {expandedHistory === task.id ? "Hide History ↑" : "History ↓"}
+                            </button>
 
-      <td className="px-6 py-4 whitespace-nowrap">
-        <span className="font-semibold text-slate-800 dark:text-slate-100">{task.mentee?.name || "Mentee"}</span>
-        <span className="block text-[11px] text-slate-400 dark:text-slate-400">{task.mentee?.email || ""}</span>
-      </td>
+                            <button
+                              onClick={() => handleDeleteTask(task)}
+                              title="Delete task"
+                              className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-md transition-colors cursor-pointer"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
 
-      <td className="px-6 py-4 whitespace-nowrap">
-        <span
-          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${task.priority === "high"
-              ? "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
-              : task.priority === "medium"
-                ? "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30"
-                : "bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-200/60 dark:border-blue-500/30"
-            }`}
-        >
-          {task.priority}
-        </span>
-      </td>
+                      {/* Expanded Submission History Row */}
+                      {expandedHistory === task.id && (
+                        <tr className="bg-slate-50/60 dark:bg-slate-900/40">
+                          <td colSpan="7" className="px-6 py-4">
+                            {historyLoading[task.id] ? (
+                              <p className="text-xs text-slate-500">Loading submission history...</p>
+                            ) : submissionHistories[task.id]?.length > 0 ? (
+                              <div className="space-y-3">
+                                {submissionHistories[task.id].map((submission) => {
+                                  const url = getSubmissionUrl(submission, null);
+                                  const text = getSubmissionText(submission, null);
+                                  const feedback = submission.mentorFeedback || submission.mentor_feedback;
+                                  return (
+                                    <div
+                                      key={submission.id}
+                                      className="p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50"
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-xs font-bold text-slate-800 dark:text-white">
+                                          Version {submission.version}
+                                        </span>
+                                        <SubmissionStatus status={submission.status} />
+                                      </div>
 
-      <td className="px-6 py-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">
-        {formatDueDateTime(task.due_date)}
-      </td>
+                                      {text && (
+                                        <p className="text-xs mt-2 text-slate-600 dark:text-slate-300">
+                                          {text}
+                                        </p>
+                                      )}
 
-      <td className="px-6 py-4 whitespace-nowrap">
-        <span
-          className={`px-2.5 py-1 rounded-lg text-xs font-semibold inline-block border ${task.status === "complete"
-              ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-500/30"
-              : task.status === "submitted"
-                ? "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-500/30"
-                : task.status === "needs-revision"
-                  ? "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200/60 dark:border-rose-500/30"
-                  : task.status === "hold"
-                    ? "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600"
-                    : "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-200/60 dark:border-blue-500/30"
-            }`}
-        >
-          {STATUS_LABELS[task.status] || task.status}
-        </span>
-      </td>
+                                      {url && (
+                                        <a
+                                          href={url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="block mt-2 text-xs text-indigo-600 dark:text-indigo-300 hover:underline break-all"
+                                        >
+                                          View Submission
+                                        </a>
+                                      )}
 
-      <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-700 dark:text-slate-100">
-        {task.score !== null && task.score !== undefined ? `${task.score}/100` : "-"}
-      </td>
-
-      <td className="px-6 py-4 whitespace-nowrap text-right">
-        <div className="inline-flex items-center gap-2 justify-end">
-          {task.status === "submitted" || (task.status === "needs-revision" && task.submission_url) ? (
-            <button
-              onClick={() => {
-                setEvalError("");
-                setEvaluatingTask(task);
-                setEvaluation({
-                  score: task.score ?? 90,
-                  feedback: task.feedback || "",
-                  status: "complete",
-                });
-              }}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer"
-            >
-              Grade & Feedback
-            </button>
-          ) : task.status === "complete" || task.feedback ? (
-            <button
-              onClick={() => {
-                setEvalError("");
-                setEvaluatingTask(task);
-                setEvaluation({
-                  score: task.score ?? "",
-                  feedback: task.feedback || "",
-                  status: task.status === "needs-revision" ? "needs-revision" : "complete",
-                });
-              }}
-              className="text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-300 font-semibold px-2 py-1 text-xs cursor-pointer"
-            >
-              View Evaluation
-            </button>
-          ) : (
-            <span className="text-slate-400 dark:text-slate-500 italic">Awaiting submission</span>
-          )}
-
-          <button
-            onClick={() => toggleHistory(task.id)}
-            className="text-xs font-semibold text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
-          >
-            {expandedHistory === task.id ? "Hide History ↑" : "History ↓"}
-          </button>
-
-          <button
-            onClick={() => handleDeleteTask(task)}
-            title="Delete task"
-            className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-md transition-colors cursor-pointer"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        </div>
-      </td>
-    </tr>
-
-    {/* Expanded Submission History Row */}
-    {expandedHistory === task.id && (
-      <tr className="bg-slate-50/60 dark:bg-slate-900/40">
-        <td colSpan="7" className="px-6 py-4">
-          {historyLoading[task.id] ? (
-            <p className="text-xs text-slate-500">Loading submission history...</p>
-          ) : submissionHistories[task.id]?.length > 0 ? (
-            <div className="space-y-3">
-              {submissionHistories[task.id].map((submission) => (
-                <div
-                  key={submission.id}
-                  className="p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-slate-800 dark:text-white">
-                      Version {submission.version}
-                    </span>
-                    <SubmissionStatus status={submission.status} />
-                  </div>
-
-                  {submission.submissionText && (
-                    <p className="text-xs mt-2 text-slate-600 dark:text-slate-300">
-                      {submission.submissionText}
-                    </p>
-                  )}
-
-                  {submission.attachmentUrl && (
-                    <a
-                      href={submission.attachmentUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block mt-2 text-xs text-indigo-600 dark:text-indigo-300 hover:underline"
-                    >
-                      View Submission
-                    </a>
-                  )}
-
-                  {submission.mentorFeedback && (
-                    <div className="mt-3 p-2 rounded bg-orange-50 dark:bg-orange-950/30">
-                      <p className="text-xs font-bold text-orange-700 dark:text-orange-300">
-                        Mentor Feedback
-                      </p>
-                      <p className="text-xs mt-1 text-slate-700 dark:text-slate-300">
-                        {submission.mentorFeedback}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-slate-500">No submission history available.</p>
-          )}
-        </td>
-      </tr>
-    )}
-  </Fragment>
-))}
+                                      {feedback && (
+                                        <div className="mt-3 p-2 rounded bg-orange-50 dark:bg-orange-950/30">
+                                          <p className="text-xs font-bold text-orange-700 dark:text-orange-300">
+                                            Mentor Feedback
+                                          </p>
+                                          <p className="text-xs mt-1 text-slate-700 dark:text-slate-300">
+                                            {feedback}
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-slate-500">No submission history available.</p>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  ))}
 
                   {filteredTasks.length === 0 && (
                     <tr>
@@ -1449,8 +1417,10 @@ const toggleHistory = (taskId) => {
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
               <h3 className="text-base font-bold text-slate-900 dark:text-white">Assign New Task</h3>
               <button
+                type="button"
                 onClick={() => setShowAssignModal(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+                aria-label="Close"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 text-xl leading-none cursor-pointer"
               >
                 &times;
               </button>
@@ -1645,8 +1615,14 @@ const toggleHistory = (taskId) => {
 
       {/* MODAL: EVALUATE TASK SUBMISSION */}
       {evaluatingTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-lg w-full p-6 text-slate-800 dark:text-slate-100">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          onClick={closeEvaluationModal}
+        >
+          <div
+            className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-lg w-full p-6 text-slate-800 dark:text-slate-100 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">Evaluate Code Submission</h3>
@@ -1655,41 +1631,61 @@ const toggleHistory = (taskId) => {
                 </p>
               </div>
               <button
-                onClick={() => setEvaluatingTask(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+                type="button"
+                onClick={closeEvaluationModal}
+                aria-label="Close"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 text-xl leading-none cursor-pointer"
               >
                 &times;
               </button>
             </div>
 
-            <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-900/60 rounded-lg border border-slate-100 dark:border-slate-700 text-xs space-y-1.5">
-              <p className="font-semibold text-slate-800 dark:text-slate-200">Deliverables:</p>
-              {evaluatingTask.submission_url ? (
-                <a
-                  href={evaluatingTask.submission_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-indigo-600 dark:text-indigo-400 hover:underline block font-mono break-all"
-                >
-                  Submission: {evaluatingTask.submission_url}
-                </a>
+            <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-900/60 rounded-lg border border-slate-100 dark:border-slate-700 text-xs space-y-2">
+              <p className="font-semibold text-slate-800 dark:text-slate-200">Mentee Submission:</p>
+
+              {submissionLoading ? (
+                <p className="text-slate-400 italic">Loading submission...</p>
               ) : (
-                <p className="text-slate-400 italic">No submission URL provided</p>
-              )}
-              {evaluatingTask.demo_url && (
-                <a
-                  href={evaluatingTask.demo_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-indigo-600 dark:text-indigo-400 hover:underline block font-mono break-all"
-                >
-                  Demo: {evaluatingTask.demo_url}
-                </a>
-              )}
-              {evaluatingTask.submission_notes && (
-                <p className="text-slate-600 dark:text-slate-300 pt-1">
-                  <span className="font-semibold">Notes:</span> {evaluatingTask.submission_notes}
-                </p>
+                <>
+                  {selectedSubmission && (
+                    <p className="text-slate-500 dark:text-slate-400">
+                      Submission {selectedSubmission.version}  
+                    </p>
+                  )}
+
+                  {getSubmissionText(selectedSubmission, evaluatingTask) && (
+                    <div>
+                      <p className="font-semibold mb-1">Submission Details:</p>
+                      <p className="text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words">
+                        {getSubmissionText(selectedSubmission, evaluatingTask)}
+                      </p>
+                    </div>
+                  )}
+
+                  {getSubmissionUrl(selectedSubmission, evaluatingTask) ? (
+                    <a
+                      href={getSubmissionUrl(selectedSubmission, evaluatingTask)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-indigo-600 dark:text-indigo-400 hover:underline block font-mono break-all"
+                    >
+                      {getSubmissionUrl(selectedSubmission, evaluatingTask)}
+                    </a>
+                  ) : (
+                    <p className="text-slate-400 italic">No submission link provided.</p>
+                  )}
+
+                  {evaluatingTask.demo_url && (
+                    <a
+                      href={evaluatingTask.demo_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-indigo-600 dark:text-indigo-400 hover:underline block font-mono break-all"
+                    >
+                      Demo: {evaluatingTask.demo_url}
+                    </a>
+                  )}
+                </>
               )}
             </div>
 
@@ -1748,7 +1744,7 @@ const toggleHistory = (taskId) => {
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setEvaluatingTask(null)}
+                  onClick={closeEvaluationModal}
                   className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
                 >
                   Cancel
@@ -1773,8 +1769,10 @@ const toggleHistory = (taskId) => {
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
               <h3 className="text-base font-bold text-slate-900 dark:text-white">Mentee Profile</h3>
               <button
+                type="button"
                 onClick={() => setViewingMentee(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+                aria-label="Close"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 text-xl leading-none cursor-pointer"
               >
                 &times;
               </button>
