@@ -54,13 +54,58 @@ function formatDueDateTime(val) {
   });
 }
 
+function formatFileSize(bytes) {
+  if (!bytes) return "";
+  return bytes < 1024 * 1024
+    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Files the mentor attached when assigning the task (PDF / DOC / DOCX).
+// Each attachment: { id?, name, size?, type?, url? } — `url` should be a
+// (signed) download link from the backend.
+function TaskAttachments({ task, compact = false }) {
+  const attachments = Array.isArray(task?.attachments) ? task.attachments : [];
+  if (attachments.length === 0) return null;
+
+  const getUrl = (att, i) =>
+    att.url || att.download_url || `/api/tasks/${task.id}/attachments/${att.id ?? i}`;
+
+  return (
+    <div className={compact ? "mt-2" : "mt-3"}>
+      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
+        Attachments from mentor ({attachments.length})
+      </p>
+      <ul className="space-y-1">
+        {attachments.map((att, i) => (
+          <li key={att.id ?? `${att.name}-${i}`}>
+            <a
+              href={getUrl(att, i)}
+              target="_blank"
+              rel="noreferrer"
+              download={att.name}
+              className="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 rounded-lg text-xs text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-slate-700 transition-colors"
+            >
+              <span className="truncate font-medium">📎 {att.name || `Attachment ${i + 1}`}</span>
+              <span className="flex-shrink-0 text-[11px] text-slate-400">
+                {formatFileSize(att.size)} ↓
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // Compact per-task time line with quick Start/Stop, used on assignment cards
 function TaskTimeRow({ task, activeTimer, elapsedSeconds, busy, onStart, onStop }) {
   const runningHere = activeTimer?.log.task_id === task.id;
   const trackable = task.status === "in-progress" || task.status === "needs-revision";
   // actual_seconds only counts closed sessions, so add the running one
   const seconds = (task.actual_seconds || 0) + (runningHere ? elapsedSeconds : 0);
-  const over = seconds > (task.estimated_hours || 0) * 3600;
+  const hasEstimate = Number(task.estimated_hours) > 0;
+  const over = hasEstimate && seconds > task.estimated_hours * 3600;
 
   return (
     <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-300">
@@ -72,8 +117,8 @@ function TaskTimeRow({ task, activeTimer, elapsedSeconds, busy, onStart, onStop 
           }`}
         >
           {formatHours(seconds)}h
-        </span>{" "}
-        / {task.estimated_hours}h
+        </span>
+        {hasEstimate && <> / {task.estimated_hours}h</>}
         {runningHere && (
           <span className="ml-2 inline-flex items-center gap-1 text-rose-600 dark:text-rose-300 font-mono">
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
@@ -764,9 +809,16 @@ const MenteeDashboard = () => {
                       <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                         {focusTask.title}
                       </h3>
-                      <p className="text-slate-600 dark:text-slate-300 text-xs mt-2 leading-relaxed">
-                        {focusTask.description}
-                      </p>
+                      {focusTask.description?.trim() ? (
+                        <p className="text-slate-600 dark:text-slate-300 text-xs mt-2 leading-relaxed whitespace-pre-line">
+                          {focusTask.description}
+                        </p>
+                      ) : (
+                        !focusTask.attachments?.length && (
+                          <p className="text-slate-400 text-xs mt-2 italic">No description provided.</p>
+                        )
+                      )}
+                      <TaskAttachments task={focusTask} />
 
                       <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-900/60 rounded-lg border border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
@@ -996,9 +1048,16 @@ const MenteeDashboard = () => {
                     </div>
 
                     <h3 className="font-bold text-slate-900 dark:text-white text-sm mt-3">{task.title}</h3>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 line-clamp-2 leading-relaxed">
-                      {task.description}
-                    </p>
+                    {task.description?.trim() ? (
+                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 line-clamp-2 leading-relaxed">
+                        {task.description}
+                      </p>
+                    ) : (
+                      !task.attachments?.length && (
+                        <p className="text-xs text-slate-400 mt-1 italic">No description provided.</p>
+                      )
+                    )}
+                    <TaskAttachments task={task} compact />
 
                     <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-xs text-slate-500 dark:text-slate-300">
                       <span>Due: {formatDueDateTime(task.due_date)}</span>
