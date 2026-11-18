@@ -724,7 +724,7 @@ const MenteeDashboard = () => {
           </div>
 
           {/* Attendance */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+          {/* <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -734,10 +734,10 @@ const MenteeDashboard = () => {
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Attendance</p>
               <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">{menteeUser.attendance || "100%"}</h2>
             </div>
-          </div>
+          </div> */}
 
           {/* Average Assignment Score */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+          {/* <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center flex-shrink-0">
               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
@@ -747,7 +747,7 @@ const MenteeDashboard = () => {
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Mentor Rating</p>
               <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">{avgScore !== null ? `${avgScore} / 100` : "N/A"}</h2>
             </div>
-          </div>
+          </div> */}
         </div>
 
         {/* TAB 1: OVERVIEW */}
