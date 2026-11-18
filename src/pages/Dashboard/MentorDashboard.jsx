@@ -182,7 +182,7 @@ const MentorDashboard = () => {
     priority: "medium",
     start_date: todayDateString,
     due_date: `${todayDateString}T23:59`,
-    estimated_hours: 4,
+    estimated_hours: "",
     description: "",
   });
 
@@ -383,11 +383,13 @@ const MentorDashboard = () => {
       return;
     }
 
-    const estimatedHours = Number(newTask.estimated_hours);
-    if (!Number.isInteger(estimatedHours) || estimatedHours <= 0) {
-      setAssignError("Estimated hours must be a positive whole number.");
-      return;
-    }
+      const rawHours = String(newTask.estimated_hours ?? "").trim();
+      const estimatedHours = rawHours === "" ? null : Number(rawHours);
+
+      if (estimatedHours !== null && (!Number.isInteger(estimatedHours) || estimatedHours <= 0)) {
+        setAssignError("Estimated hours must be a positive whole number.");
+        return;
+}
 
     setDateError("");
     const payload = {
@@ -415,7 +417,7 @@ const MentorDashboard = () => {
         priority: "medium",
         start_date: todayDateString,
         due_date: `${todayDateString}T23:59`,
-        estimated_hours: 4,
+        estimated_hours: "",
         description: "",
       });
       showToast(
@@ -1311,7 +1313,7 @@ const MentorDashboard = () => {
                                     >
                                       <div className="flex items-center justify-between gap-2">
                                         <span className="text-xs font-bold text-slate-800 dark:text-white">
-                                          Version {submission.version}
+                                          Submission {submission.version}
                                         </span>
                                         <SubmissionStatus status={submission.status} />
                                       </div>
@@ -1555,19 +1557,19 @@ const MentorDashboard = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                  Estimated Hours <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="1000"
-                  required
-                  value={newTask.estimated_hours}
-                  onChange={(e) => setNewTask({ ...newTask, estimated_hours: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                />
-              </div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                    Estimated Hours <span className="text-slate-400 normal-case font-medium">(Optional)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="1000"
+                    placeholder="e.g. 4"
+                    value={newTask.estimated_hours}
+                    onChange={(e) => setNewTask({ ...newTask, estimated_hours: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
 
               {dateError && (
                 <p className="text-xs text-rose-500 font-semibold flex items-center gap-1">
@@ -1649,7 +1651,7 @@ const MentorDashboard = () => {
                 <>
                   {selectedSubmission && (
                     <p className="text-slate-500 dark:text-slate-400">
-                      Submission {selectedSubmission.version}  
+                      Submission {selectedSubmission.version}
                     </p>
                   )}
 
