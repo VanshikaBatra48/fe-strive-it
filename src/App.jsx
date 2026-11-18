@@ -49,6 +49,10 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/chat/:groupId"
+              element={<ChatPage />}
+/>
             <Route path="/change-password" element={<Navigate to="/changePassword" replace />} />
             <Route
               path="/dashboard"
