@@ -2046,6 +2046,19 @@ import {
 import SubmissionStatus from "../../components/taskSubmission/SubmissionStatus";
 import { formatHours } from "../../utils/formatDuration";
 
+const ALLOWED_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
+const MAX_FILES = 5;
+const MAX_SIZE_MB = 10;
+
+const formatSize = (bytes) =>
+  bytes < 1024 * 1024
+    ? `${(bytes / 1024).toFixed(0)} KB`
+    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
 function getInitials(name = "") {
   const normalized = typeof name === "string" ? name.trim() : "";
   if (!normalized) return "?";
@@ -2229,6 +2242,38 @@ const MentorDashboard = () => {
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [submissionLoading, setSubmissionLoading] = useState(false);
   const evalRequestId = useRef(0);
+  // Deliverable attachments from the mentor (PDF / DOC / DOCX)
+  const [files, setFiles] = useState([]);
+  const [fileError, setFileError] = useState("");
+  const fileInputRef = useRef(null);
+
+  const addFiles = (incoming) => {
+    setFileError("");
+    const valid = [];
+    let error = "";
+    for (const f of Array.from(incoming || [])) {
+      if (!ALLOWED_TYPES.includes(f.type)) {
+        error = `"${f.name}" is not allowed. Only PDF, DOC and DOCX files are accepted.`;
+        continue;
+      }
+      if (f.size > MAX_SIZE_MB * 1024 * 1024) {
+        error = `"${f.name}" exceeds ${MAX_SIZE_MB} MB.`;
+        continue;
+      }
+      valid.push(f);
+    }
+    if (files.length + valid.length > MAX_FILES) {
+      error = `You can attach up to ${MAX_FILES} files.`;
+    }
+    setFiles([...files, ...valid].slice(0, MAX_FILES));
+    if (error) setFileError(error);
+  };
+
+  const removeFile = (index) => {
+    setFileError("");
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
 
   // New Task Form (matches backend POST /api/tasks fields)
   const [newTask, setNewTask] = useState({
@@ -2389,6 +2434,8 @@ const MentorDashboard = () => {
   const openAssignModal = (preferredMenteeId = "") => {
     setDateError("");
     setAssignError("");
+    setFiles([]);
+    setFileError("");
     setNewTask((prev) => ({
       ...prev,
       mentee_id: preferredMenteeId
@@ -2434,8 +2481,8 @@ const MentorDashboard = () => {
       return;
     }
 
-    if (!newTask.description.trim()) {
-      setAssignError("Task description is required.");
+    if (!newTask.description.trim() && files.length === 0) {
+      setAssignError("Add a description or attach at least one file.");
       return;
     }
 
@@ -2443,21 +2490,27 @@ const MentorDashboard = () => {
     const estimatedHours = rawHours === "" ? null : Number(rawHours);
 
     if (estimatedHours !== null && (!Number.isInteger(estimatedHours) || estimatedHours <= 0)) {
+    // Estimated hours is optional; validate only if the mentor entered a value
+    const hoursInput = String(newTask.estimated_hours ?? "").trim();
+    const hasEstimate = hoursInput !== "";
+    const estimatedHours = Number(hoursInput);
+    if (hasEstimate && (!Number.isInteger(estimatedHours) || estimatedHours <= 0)) {
       setAssignError("Estimated hours must be a positive whole number.");
       return;
     }
 
     setDateError("");
-    const payload = {
-      title: newTask.title.trim(),
-      mentee_id: targetMenteeId,
-      category: newTask.category,
-      priority: newTask.priority,
-      start_date: newTask.start_date,
-      due_date: new Date(newTask.due_date).toISOString(),
-      estimated_hours: estimatedHours,
-      description: newTask.description.trim(),
-    };
+    // multipart/form-data so files can travel with the text fields
+    const payload = new FormData();
+    payload.append("title", newTask.title.trim());
+    payload.append("mentee_id", String(targetMenteeId));
+    payload.append("category", newTask.category);
+    payload.append("priority", newTask.priority);
+    payload.append("start_date", newTask.start_date);
+    payload.append("due_date", new Date(newTask.due_date).toISOString());
+    if (hasEstimate) payload.append("estimated_hours", String(estimatedHours));
+    payload.append("description", newTask.description.trim());
+    files.forEach((file) => payload.append("attachments", file));
 
     setActionLoading(true);
     const res = await assignTask(payload);
@@ -2466,6 +2519,8 @@ const MentorDashboard = () => {
     if (res.success) {
       const selectedMentee = mentees.find((m) => m.id === targetMenteeId);
       setShowAssignModal(false);
+      setFiles([]);
+      setFileError("");
       setNewTask({
         title: "",
         mentee_id: mentees[0]?.id ? String(mentees[0].id) : "",
@@ -2701,21 +2756,7 @@ const MentorDashboard = () => {
               )}
             </button>
 
-            <button
-              onClick={() => {
-                setActiveTab("reports");
-                mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "reports"
-                  ? "bg-indigo-600 text-white shadow-xs"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                }`}
-            >
-              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              <span>Performance</span>
-            </button>
+            
 
             <button
               type="button"
@@ -3647,16 +3688,71 @@ const MentorDashboard = () => {
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
                   Description & Deliverables <span className="text-rose-500">*</span>
                 </label>
+
                 <textarea
                   rows="3"
-                  required
-                  placeholder="Details, technical acceptance criteria, resources..."
+                  required={files.length === 0}
+                  placeholder="Details, technical acceptance criteria, resources... (or attach a file below)"
                   value={newTask.description}
                   onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 />
-              </div>
 
+                {/* Drop zone / file picker */}
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    addFiles(e.dataTransfer.files);
+                  }}
+                  className="mt-2 flex flex-col items-center justify-center px-3 py-4 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer hover:border-indigo-400 transition-colors"
+                >
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    <span className="font-semibold text-indigo-600">Click to attach</span> or drag and drop
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    PDF, DOC, DOCX · up to {MAX_SIZE_MB} MB each · max {MAX_FILES} files
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    className="hidden"
+                    onChange={(e) => {
+                      addFiles(e.target.files);
+                      e.target.value = ""; // allows re-selecting the same file
+                    }}
+                  />
+                </div>
+
+                {fileError && <p className="mt-1 text-xs text-rose-500">{fileError}</p>}
+
+                {/* Selected files */}
+                {files.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {files.map((f, i) => (
+                      <li
+                        key={`${f.name}-${i}`}
+                        className="flex items-center justify-between px-3 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg text-xs text-slate-700 dark:text-slate-300"
+                      >
+                        <span className="truncate">
+                          {f.name} <span className="text-slate-400">({formatSize(f.size)})</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(i)}
+                          className="ml-2 text-rose-500 hover:text-rose-600 font-bold"
+                          aria-label={`Remove ${f.name}`}
+                        >
+                          ✕
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -3970,5 +4066,6 @@ const MentorDashboard = () => {
     </div>
   );
 };
+}
 
 export default MentorDashboard;

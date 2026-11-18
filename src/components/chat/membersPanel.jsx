@@ -129,7 +129,7 @@ export default function MembersPanel({ groupId, me, onClose, onChanged, onDelete
             </button>
           </form>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <strong>{group.name}</strong>
             {canManage && (
               <button
