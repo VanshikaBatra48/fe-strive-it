@@ -91,27 +91,27 @@ export const AuthProvider = ({ children }) => {
       setMustChangePassword(true);
     };
 
-    const handleTokenRefreshed = (event) => {
-      const refreshedToken = event.detail?.token;
-      const refreshedUser = event.detail?.user;
-      if (refreshedToken) {
-        setToken(refreshedToken);
-      }
-      if (refreshedUser) {
-        setUser((prev) => ({ ...(prev || {}), ...refreshedUser }));
-        setMustChangePassword(Boolean(refreshedUser.firstLogin));
-      }
-    };
+    // const handleTokenRefreshed = (event) => {
+    //   const refreshedToken = event.detail?.token;
+    //   const refreshedUser = event.detail?.user;
+    //   if (refreshedToken) {
+    //     setToken(refreshedToken);
+    //   }
+    //   if (refreshedUser) {
+    //     setUser((prev) => ({ ...(prev || {}), ...refreshedUser }));
+    //     setMustChangePassword(Boolean(refreshedUser.firstLogin));
+    //   }
+    // };
 
     window.addEventListener('auth:unauthorized', handleUnauthorized);
     window.addEventListener('auth:first-login-required', handleFirstLoginRequired);
-    window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
+    // window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
 
     return () => {
       isMounted = false;
       window.removeEventListener('auth:unauthorized', handleUnauthorized);
       window.removeEventListener('auth:first-login-required', handleFirstLoginRequired);
-      window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
+      // window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
     };
   }, []);
 
