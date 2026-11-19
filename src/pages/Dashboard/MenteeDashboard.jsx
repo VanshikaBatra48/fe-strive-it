@@ -9,10 +9,13 @@ import {
   submitTaskVersion,
   getTaskSubmissionHistory,
 } from "../../api/taskSubmissionApi";
+import { useActiveTimer } from "../../hooks/useActiveTimer";
+import { startTaskTimer, stopTaskTimer, TIMER_CHANGED_EVENT } from "../../api/timeLog";
+import TaskTimer from "../../components/TaskTimer";
+import { formatDuration, formatHours } from "../../utils/formatDuration";
 
 import SubmissionStatus from "../../components/taskSubmission/SubmissionStatus";
 // Helper to get 2-letter initials
-
 function getInitials(name = "") {
   const normalized = typeof name === "string" ? name.trim() : "";
   if (!normalized) return "?";
@@ -61,6 +64,103 @@ function formatDueDateTime(val) {
   });
 }
 
+function formatFileSize(bytes) {
+  if (!bytes) return "";
+  return bytes < 1024 * 1024
+    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Files the mentor attached when assigning the task (PDF / DOC / DOCX).
+// Each attachment: { id?, name, size?, type?, url? } — `url` should be a
+// (signed) download link from the backend.
+function TaskAttachments({ task, compact = false }) {
+  const attachments = Array.isArray(task?.attachments) ? task.attachments : [];
+  if (attachments.length === 0) return null;
+
+  const getUrl = (att, i) =>
+    att.url || att.download_url || `/api/tasks/${task.id}/attachments/${att.id ?? i}`;
+
+  return (
+    <div className={compact ? "mt-2" : "mt-3"}>
+      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
+        Attachments from mentor ({attachments.length})
+      </p>
+      <ul className="space-y-1">
+        {attachments.map((att, i) => (
+          <li key={att.id ?? `${att.name}-${i}`}>
+            <a
+              href={getUrl(att, i)}
+              target="_blank"
+              rel="noreferrer"
+              download={att.name}
+              className="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 rounded-lg text-xs text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-slate-700 transition-colors"
+            >
+              <span className="truncate font-medium">📎 {att.name || `Attachment ${i + 1}`}</span>
+              <span className="flex-shrink-0 text-[11px] text-slate-400">
+                {formatFileSize(att.size)} ↓
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Compact per-task time line with quick Start/Stop, used on assignment cards
+function TaskTimeRow({ task, activeTimer, elapsedSeconds, busy, onStart, onStop }) {
+  const isFinished = task.status === "submitted" || task.status === "complete";
+  const runningHere = !isFinished && activeTimer?.log.task_id === task.id;
+  const trackable = task.status === "in-progress" || task.status === "needs-revision";
+  // actual_seconds only counts closed sessions, so add the running one
+  const seconds = (task.actual_seconds || 0) + (runningHere ? elapsedSeconds : 0);
+  const hasEstimate = Number(task.estimated_hours) > 0;
+  const over = hasEstimate && seconds > task.estimated_hours * 3600;
+
+  return (
+    <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-300">
+      <span className="min-w-0">
+        Time:{" "}
+        <span
+          className={`font-semibold ${
+            over ? "text-rose-600 dark:text-rose-300" : "text-slate-700 dark:text-slate-100"
+          }`}
+        >
+          {formatHours(seconds)}h
+        </span>
+        {hasEstimate && <> / {task.estimated_hours}h</>}
+        {runningHere && (
+          <span className="ml-2 inline-flex items-center gap-1 text-rose-600 dark:text-rose-300 font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+            {formatDuration(elapsedSeconds)}
+          </span>
+        )}
+      </span>
+
+      {trackable &&
+        (runningHere ? (
+          <button
+            disabled={busy}
+            onClick={() => onStop(task.id)}
+            className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-semibold cursor-pointer flex-shrink-0"
+          >
+            Stop
+          </button>
+        ) : (
+          <button
+            disabled={busy || !!activeTimer}
+            title={activeTimer ? "Stop your running timer first" : "Start timer"}
+            onClick={() => onStart(task)}
+            className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold cursor-pointer flex-shrink-0"
+          >
+            Start
+          </button>
+        ))}
+    </div>
+  );
+}
+
 const MenteeDashboard = () => {
   const navigate = useNavigate();
   const mainRef = useRef(null);
@@ -99,6 +199,18 @@ const MenteeDashboard = () => {
     const onNewNotification = () => refetch();
     socket.on("notification:new", onNewNotification);
     return () => socket.off("notification:new", onNewNotification);
+  }, [refetch]);
+
+  // One shared request + ticking clock for the running timer (navbar pill, focus task, cards)
+  const { active: activeTimer, elapsedSeconds } = useActiveTimer(true);
+  const [timerBusy, setTimerBusy] = useState(false);
+
+  // Refresh tasks whenever a timer starts or stops (updates actual_seconds and status)
+  useEffect(() => {
+    if (!refetch) return;
+    const onTimerChanged = () => refetch();
+    window.addEventListener(TIMER_CHANGED_EVENT, onTimerChanged);
+    return () => window.removeEventListener(TIMER_CHANGED_EVENT, onTimerChanged);
   }, [refetch]);
 
   // Filter tasks strictly for this logged-in mentee from the database
@@ -141,6 +253,32 @@ const MenteeDashboard = () => {
     setTimeout(() => setNotification(null), 4000);
   };
 
+  const notifyTimerChanged = () => window.dispatchEvent(new Event(TIMER_CHANGED_EVENT));
+
+  const handleQuickStart = async (task) => {
+    setTimerBusy(true);
+    try {
+      await startTaskTimer(task.id);
+      notifyTimerChanged();
+    } catch (e) {
+      showToast("error", e?.response?.data?.message || "Could not start the timer");
+    } finally {
+      setTimerBusy(false);
+    }
+  };
+
+  const handleQuickStop = async (taskId) => {
+    setTimerBusy(true);
+    try {
+      await stopTaskTimer(taskId);
+      notifyTimerChanged();
+    } catch (e) {
+      showToast("error", e?.response?.data?.message || "Could not stop the timer");
+    } finally {
+      setTimerBusy(false);
+    }
+  };
+
   // Filtered Tasks
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
@@ -180,14 +318,27 @@ const MenteeDashboard = () => {
   const progressPercentage =
     tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
+  // Total time logged across closed sessions, plus the session running right now
+  const totalLoggedSeconds = useMemo(
+    () =>
+      tasks.reduce((sum, t) => sum + (t.actual_seconds || 0), 0) +
+      (activeTimer ? elapsedSeconds : 0),
+    [tasks, activeTimer, elapsedSeconds]
+  );
+
+  // The task with a running timer always takes focus; otherwise fall back to the usual order
   const focusTask = useMemo(() => {
+    const runningTask = activeTimer
+      ? tasks.find((t) => t.id === activeTimer.log.task_id && t.status !== "submitted" && t.status !== "complete")
+      : null;
     return (
+      runningTask ||
       tasks.find((t) => t.status === "in-progress" || t.status === "needs-revision") ||
       tasks.find((t) => t.status === "submitted") ||
       tasks[0] ||
       null
     );
-  }, [tasks]);
+  }, [tasks, activeTimer]);
 
   const recentEvaluatedTask = useMemo(() => {
     return tasks.find((t) => Boolean(t.feedback) || t.status === "complete") || null;
@@ -230,6 +381,12 @@ const MenteeDashboard = () => {
       return;
     }
     const res = await updateTaskStatus(taskId, nextStatus);
+    if (res.success) {
+      showToast("success", `Task status updated to ${STATUS_LABELS[nextStatus] || nextStatus}`);
+      notifyTimerChanged(); // backend closes any running timer on hold
+    } else {
+      showToast("error", res.error || "Failed to update task status");
+    }
   };
 
   
@@ -453,6 +610,23 @@ const handleSubmitTask = async (e) => {
           </div>
 
           <div className="flex items-center gap-3 relative">
+            {/* Running timer pill: visible from every tab */}
+            {activeTimer && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("dashboard");
+                  mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                title="Timer running. Click to open your focus task"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 text-xs font-semibold cursor-pointer"
+              >
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                <span className="max-w-[140px] truncate">{activeTimer.log.task?.title ?? "Task"}</span>
+                <span className="font-mono">{formatDuration(elapsedSeconds)}</span>
+              </button>
+            )}
+
             {/* Dark Mode Toggle Button */}
             <ThemeToggle />
 
@@ -633,7 +807,7 @@ const handleSubmitTask = async (e) => {
           </div>
 
           {/* Attendance */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+          {/* <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -643,10 +817,10 @@ const handleSubmitTask = async (e) => {
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Attendance</p>
               <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">{menteeUser.attendance || "100%"}</h2>
             </div>
-          </div>
+          </div> */}
 
           {/* Average Assignment Score */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+          {/* <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center flex-shrink-0">
               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
@@ -656,7 +830,7 @@ const handleSubmitTask = async (e) => {
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Mentor Rating</p>
               <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">{avgScore !== null ? `${avgScore} / 100` : "N/A"}</h2>
             </div>
-          </div>
+          </div> */}
         </div>
 
         {/* TAB 1: OVERVIEW */}
@@ -720,9 +894,16 @@ const handleSubmitTask = async (e) => {
                       <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                         {focusTask.title}
                       </h3>
-                      <p className="text-slate-600 dark:text-slate-300 text-xs mt-2 leading-relaxed">
-                        {focusTask.description}
-                      </p>
+                      {focusTask.description?.trim() ? (
+                        <p className="text-slate-600 dark:text-slate-300 text-xs mt-2 leading-relaxed whitespace-pre-line">
+                          {focusTask.description}
+                        </p>
+                      ) : (
+                        !focusTask.attachments?.length && (
+                          <p className="text-slate-400 text-xs mt-2 italic">No description provided.</p>
+                        )
+                      )}
+                      <TaskAttachments task={focusTask} />
 
                       <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-900/60 rounded-lg border border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
@@ -777,6 +958,16 @@ const handleSubmitTask = async (e) => {
                             Submit Work &rarr;
                           </button>
                         )}
+                      </div>
+
+                      <div className="mt-4">
+                        <TaskTimer
+                          key={`${focusTask.id}-${focusTask.status}`}
+                          taskId={focusTask.id}
+                          estimatedHours={focusTask.estimated_hours}
+                          taskStatus={focusTask.status}
+                          canTrack={focusTask.status === "in-progress" || focusTask.status === "needs-revision"}
+                        />
                       </div>
                     </>
                   ) : (
@@ -855,6 +1046,12 @@ const handleSubmitTask = async (e) => {
                       <span className="text-slate-500 dark:text-slate-300">Total Tasks Graded:</span>
                       <span className="font-semibold text-slate-800 dark:text-slate-100">
                         {evaluatedTasks.length} Graded
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 dark:text-slate-300">Total Time Logged:</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">
+                        {formatHours(totalLoggedSeconds)}h
                       </span>
                     </div>
                   </div>
@@ -1023,9 +1220,16 @@ const handleSubmitTask = async (e) => {
                     </div>
 
                     <h3 className="font-bold text-slate-900 dark:text-white text-sm mt-3">{task.title}</h3>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 line-clamp-2 leading-relaxed">
-                      {task.description}
-                    </p>
+                    {task.description?.trim() ? (
+                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 line-clamp-2 leading-relaxed">
+                        {task.description}
+                      </p>
+                    ) : (
+                      !task.attachments?.length && (
+                        <p className="text-xs text-slate-400 mt-1 italic">No description provided.</p>
+                      )
+                    )}
+                    <TaskAttachments task={task} compact />
 
                     <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-xs text-slate-500 dark:text-slate-300">
                       <span>Due: {formatDueDateTime(task.due_date)}</span>
@@ -1033,6 +1237,15 @@ const handleSubmitTask = async (e) => {
                         {task.score !== null && task.score !== undefined ? `Score: ${task.score}/100` : `Priority: ${task.priority}`}
                       </span>
                     </div>
+
+                    <TaskTimeRow
+                      task={task}
+                      activeTimer={activeTimer}
+                      elapsedSeconds={elapsedSeconds}
+                      busy={timerBusy}
+                      onStart={handleQuickStart}
+                      onStop={handleQuickStop}
+                    />
 
                     {task.submission_url && (
                       <div className="mt-2 flex flex-wrap gap-3 text-xs">

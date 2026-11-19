@@ -115,18 +115,18 @@ export const useTasks = (initialFilters = {}, autoFetch = true) => {
     }
   }, []);
 
-  const deleteTask = useCallback(async (id) => {
-    setError(null);
-    try {
-      await taskApi.deleteTask(id);
-      setTasks((prev) => prev.filter((t) => t.id !== Number(id)));
-      return { success: true };
-    } catch (err) {
-      const msg = getErrMsg(err, 'Failed to delete task');
-      setError(msg);
-      return { success: false, error: msg };
-    }
-  }, []);
+  // const deleteTask = useCallback(async (id) => {
+  //   setError(null);
+  //   try {
+  //     await taskApi.deleteTask(id);
+  //     setTasks((prev) => prev.filter((t) => t.id !== Number(id)));
+  //     return { success: true };
+  //   } catch (err) {
+  //     const msg = getErrMsg(err, 'Failed to delete task');
+  //     setError(msg);
+  //     return { success: false, error: msg };
+  //   }
+  // }, []);
 
   const removeTasksByMenteeId = useCallback((menteeId) => {
     setTasks((prev) => prev.filter((t) => t.mentee_id !== Number(menteeId)));
@@ -143,7 +143,7 @@ export const useTasks = (initialFilters = {}, autoFetch = true) => {
     updateTaskStatus,
     submitTask,
     evaluateTask,
-    deleteTask,
+    // deleteTask,
     removeTasksByMenteeId,
     refetch: fetchTasks,
   };

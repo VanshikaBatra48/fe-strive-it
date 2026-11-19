@@ -65,10 +65,15 @@ export function NotificationProvider({ token, children }) {
     socket.connect();
 
     const onNew = (n) => {
-      if (!isMounted) return;
-      setNotifications((prev) => (prev.some((x) => x.id === n.id) ? prev : [n, ...prev]));
-      setUnreadCount((c) => c + 1);
-    };
+  if (!isMounted) return;
+
+  setNotifications((prev) => {
+    if (prev.some((x) => x.id === n.id)) return prev;
+    return [n, ...prev];
+  });
+
+  setUnreadCount((c) => c + 1);
+};
 
     // After a reconnect, refetch anything missed while offline
     const onConnect = () => {
