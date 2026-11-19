@@ -435,6 +435,7 @@ const handleSubmitTask = async (e) => {
     });
 
     // Refresh task status and submission history
+    notifyTimerChanged(); // backend closes any running timer on submit
     await refetch();
     await fetchSubmissionHistory(taskId);
 
