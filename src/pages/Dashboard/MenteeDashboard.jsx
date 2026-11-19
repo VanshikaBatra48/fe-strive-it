@@ -29,6 +29,7 @@ function getInitials(name = "") {
 const MENTEE_STATUS_OPTIONS = [
   { value: "in-progress", label: "In Progress" },
   { value: "hold", label: "On Hold" },
+  {value: 'blocker', label: "Blocker"}
 ];
 
 const STATUS_LABELS = {
@@ -37,11 +38,10 @@ const STATUS_LABELS = {
   completed: "Completed",
   changes_requested: "Changes Requested",
   approved: "Approved",
-
-  // Existing task statuses, for backward compatibility
   submitted: "Submitted",
   "needs-revision": "Needs Revision",
-  complete: "Complete"
+  complete: "Complete",
+  blocker: "Blocker"
 };
 
 const CATEGORY_LABELS = {
@@ -239,6 +239,10 @@ const MenteeDashboard = () => {
   const [historyLoading, setHistoryLoading] = useState({});
   const [expandedHistory, setExpandedHistory] = useState(null);
 
+  const [blockerTask, setBlockerTask] = useState(null);
+  const [blockerMessage, setBlockerMessage] = useState("");
+  const [blockerLoading, setBlockerLoading] = useState(false);
+
   // Submission Form State (matches backend PATCH /api/tasks/:id/submit)
   const [submissionForm, setSubmissionForm] = useState({
     submission_url: "",
@@ -372,10 +376,20 @@ const MenteeDashboard = () => {
   const handleStatusChange = async (taskId, nextStatus) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
-    if (task.status === "submitted" || task.status === "complete" || task.status === "needs-revision") {
+    if (task.status === "submitted" || 
+        task.status === "complete" || 
+        task.status === "needs-revision") {
       showToast("error", "Task is locked. You cannot change the status of a submitted or evaluated task.");
       return;
+    } 
+
+    // Open blocker popup instead of directly updating status
+    if (nextStatus === "blocker") {
+      setBlockerTask(task);
+      setBlockerMessage("");
+      return;
     }
+
     if (nextStatus !== "in-progress" && nextStatus !== "hold") {
       showToast("error", "You can only set status to In Progress or On Hold.");
       return;
@@ -394,8 +408,8 @@ const MenteeDashboard = () => {
 
     // Submit task handler - creates a new submission version
       
-const handleSubmitTask = async (e) => {
-  e.preventDefault();
+  const handleSubmitTask = async (e) => {
+    e.preventDefault();
 
   if (!submittingTask) return;
 
@@ -435,28 +449,28 @@ const handleSubmitTask = async (e) => {
     });
 
     // Refresh task status and submission history
-    notifyTimerChanged(); // backend closes any running timer on submit
-    await refetch();
-    await fetchSubmissionHistory(taskId);
+      notifyTimerChanged(); // backend closes any running timer on submit
+      await refetch();
+      await fetchSubmissionHistory(taskId);
 
-    showToast(
-      "success",
-      "Task resubmitted successfully! Your mentor has been notified."
-    );
+      showToast(
+        "success",
+        "Task resubmitted successfully! Your mentor has been notified."
+      );
 
-  } catch (error) {
-    console.error("Submission error:", error);
+    } catch (error) {
+      console.error("Submission error:", error);
 
-    setSubmitError(
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      error.message ||
-      "Failed to submit task"
-    );
-  } finally {
-    setActionLoading(false);
-  }
-};
+      setSubmitError(
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to submit task"
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
 
   const fetchSubmissionHistory = async (taskId) => {
@@ -481,8 +495,37 @@ const handleSubmitTask = async (e) => {
       [taskId]: false,
     }));
   }
-
 };
+    const handleRaiseBlocker = async (e) => {
+    e.preventDefault();
+
+    if (!blockerTask || !blockerMessage.trim()) return;
+
+    setBlockerLoading(true);
+
+    try {
+      // Update the task status to blocker
+      const res = await updateTaskStatus(blockerTask.id, "blocker");
+
+      if (res.success) {
+        showToast("success", "Task status updated to Blocker");
+
+          // Close the popup and clear the message
+        setBlockerTask(null);
+        setBlockerMessage("");
+
+        notifyTimerChanged();
+        } else {
+          showToast("error", res.error || "Failed to update task status");
+        }
+      } catch (error) {
+        console.error("Error raising blocker:", error);
+        showToast("error", "Something went wrong while raising the blocker");
+      } finally {
+        setBlockerLoading(false);
+      }
+    };
+
 
 
   return (
@@ -1075,7 +1118,7 @@ const handleSubmitTask = async (e) => {
               </div>
 
               <div className="flex flex-wrap bg-slate-100 dark:bg-slate-700 p-0.5 rounded-lg text-xs font-medium">
-                {["All", "in-progress", "submitted", "needs-revision", "complete", "hold"].map((filter) => (
+                {["All", "in-progress", "submitted", "needs-revision", "complete", "hold", "blocker"].map((filter) => (
                   <button
                     key={filter}
                     onClick={() => setTaskFilter(filter)}
@@ -1564,6 +1607,87 @@ const handleSubmitTask = async (e) => {
           </div>
         </div>
       )}
+
+
+          {/* MODAL: RAISE TASK BLOCKER */}
+          {blockerTask && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6">
+
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      Raise a Blocker
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      Explain what you are stuck on.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setBlockerTask(null)}
+                    className="text-xl text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                  >
+                    &times;
+                  </button>
+                </div>
+
+                <div className="mt-4">
+                  <p className="text-sm font-semibold text-slate-800 dark:text-white">
+                    {blockerTask.title}
+                  </p>
+
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Your mentor {menteeUser.mentor} will receive your message.
+                  </p>
+                </div>
+
+                <form
+                  onSubmit={handleRaiseBlocker}
+                  className="mt-4 space-y-4"
+                >
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                      Describe your confusion
+                    </label>
+
+                    <textarea
+                      rows={5}
+                      required
+                      maxLength={2000}
+                      value={blockerMessage}
+                      onChange={(e) => setBlockerMessage(e.target.value)}
+                      placeholder="Explain the problem you are facing..."
+                      className="w-full px-3 py-3 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-900 text-slate-800 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+                    />
+
+                    <p className="text-right text-[11px] text-slate-400 mt-1">
+                      {blockerMessage.length}/2000
+                    </p>
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBlockerTask(null)}
+                      className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold"
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={!blockerMessage.trim() || blockerLoading}
+                      className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold disabled:opacity-50"
+                    >
+                      {blockerLoading ? "Sending..." : "Send to Mentor"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
     </div>
   );
 };
