@@ -60,7 +60,7 @@ export function NotificationProvider({ token, children }) {
       });
 
     socket.auth = (cb) => {
-      cb({ token: localStorage.getItem('token') });
+      cb({ token: sessionStorage.getItem('token') });
     };
     socket.connect();
 

@@ -3,10 +3,10 @@ import AuthContext from './AuthContext';
 import authApi from '../api/authApi';
 
 export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(() => localStorage.getItem('token') || null);
+  const [token, setToken] = useState(() => sessionStorage.getItem('token') || null);
   const [user, setUser] = useState(() => {
     try {
-      const raw = localStorage.getItem('user');
+      const raw = sessionStorage.getItem('user');
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -21,29 +21,16 @@ export const AuthProvider = ({ children }) => {
     let isMounted = true;
 
     async function verifyAuth() {
-      const storedToken = localStorage.getItem('token');
+      const storedToken = sessionStorage.getItem('token');
 
       if (!storedToken) {
-        try {
-          const refreshRes = await authApi.refresh();
-          const refreshedToken = refreshRes?.accessToken || refreshRes?.token;
-          if (isMounted && refreshedToken && refreshRes?.user) {
-            localStorage.setItem('token', refreshedToken);
-            localStorage.setItem('user', JSON.stringify(refreshRes.user));
-            setToken(refreshedToken);
-            setUser(refreshRes.user);
-            setMustChangePassword(Boolean(refreshRes.user.firstLogin));
-          }
-        } catch {
-          if (isMounted) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            setToken(null);
-            setUser(null);
-            setMustChangePassword(false);
-          }
-        } finally {
-          if (isMounted) setLoading(false);
+        // New tab with no session: never borrow another tab's identity.
+        if (isMounted) {
+          sessionStorage.removeItem('user');
+          setToken(null);
+          setUser(null);
+          setMustChangePassword(false);
+          setLoading(false);
         }
         return;
       }
@@ -53,7 +40,7 @@ export const AuthProvider = ({ children }) => {
         if (isMounted && res?.success && res?.user) {
           setUser((prev) => {
             const merged = { ...prev, ...res.user };
-            localStorage.setItem('user', JSON.stringify(merged));
+            sessionStorage.setItem('user', JSON.stringify(merged));
             return merged;
           });
           if (res.user.firstLogin) {
@@ -68,8 +55,8 @@ export const AuthProvider = ({ children }) => {
           ) {
             setMustChangePassword(true);
           } else if (err.response?.status === 401) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('user');
             setToken(null);
             setUser(null);
           }
@@ -91,27 +78,27 @@ export const AuthProvider = ({ children }) => {
       setMustChangePassword(true);
     };
 
-    // const handleTokenRefreshed = (event) => {
-    //   const refreshedToken = event.detail?.token;
-    //   const refreshedUser = event.detail?.user;
-    //   if (refreshedToken) {
-    //     setToken(refreshedToken);
-    //   }
-    //   if (refreshedUser) {
-    //     setUser((prev) => ({ ...(prev || {}), ...refreshedUser }));
-    //     setMustChangePassword(Boolean(refreshedUser.firstLogin));
-    //   }
-    // };
+    const handleTokenRefreshed = (event) => {
+      const refreshedToken = event.detail?.token;
+      const refreshedUser = event.detail?.user;
+      if (refreshedToken) {
+        setToken(refreshedToken);
+      }
+      if (refreshedUser) {
+        setUser((prev) => ({ ...(prev || {}), ...refreshedUser }));
+        setMustChangePassword(Boolean(refreshedUser.firstLogin));
+      }
+    };
 
     window.addEventListener('auth:unauthorized', handleUnauthorized);
     window.addEventListener('auth:first-login-required', handleFirstLoginRequired);
-    // window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
+    window.addEventListener('auth:token-refreshed', handleTokenRefreshed);
 
     return () => {
       isMounted = false;
       window.removeEventListener('auth:unauthorized', handleUnauthorized);
       window.removeEventListener('auth:first-login-required', handleFirstLoginRequired);
-      // window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
+      window.removeEventListener('auth:token-refreshed', handleTokenRefreshed);
     };
   }, []);
 
@@ -122,8 +109,8 @@ export const AuthProvider = ({ children }) => {
       const accessToken = data?.accessToken || data?.token;
 
       if (accessToken && data?.user) {
-        localStorage.setItem('token', accessToken);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        sessionStorage.setItem('token', accessToken);
+        sessionStorage.setItem('user', JSON.stringify(data.user));
         setToken(accessToken);
         setUser(data.user);
 
@@ -150,14 +137,16 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    // Capture the id first: the server clears only THIS user's refresh cookie.
+    const userId = user?.id;
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
     setToken(null);
     setUser(null);
     setAuthError(null);
     setMustChangePassword(false);
-    return authApi.logout().catch(() => {});
-  }, []);
+    return authApi.logout(userId).catch(() => {});
+  }, [user?.id]);
 
   const logoutAll = useCallback(async () => {
     try {
@@ -165,8 +154,8 @@ export const AuthProvider = ({ children }) => {
     } catch {
       // Clear local session state even if the request fails
     } finally {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
       setToken(null);
       setUser(null);
       setAuthError(null);
@@ -181,7 +170,7 @@ export const AuthProvider = ({ children }) => {
       if (data?.success) {
         const accessToken = data.accessToken || data.token;
         if (accessToken) {
-          localStorage.setItem('token', accessToken);
+          sessionStorage.setItem('token', accessToken);
           setToken(accessToken);
         }
         setMustChangePassword(false);
@@ -191,7 +180,7 @@ export const AuthProvider = ({ children }) => {
             ...(data.user || {}),
             firstLogin: false,
           };
-          localStorage.setItem('user', JSON.stringify(updated));
+          sessionStorage.setItem('user', JSON.stringify(updated));
           return updated;
         });
         return { success: true, message: data.message };
@@ -211,7 +200,7 @@ export const AuthProvider = ({ children }) => {
         setUser((prev) => {
           if (!prev) return prev;
           const updated = { ...prev, firstLogin: false };
-          localStorage.setItem('user', JSON.stringify(updated));
+          sessionStorage.setItem('user', JSON.stringify(updated));
           return updated;
         });
         return { success: true };

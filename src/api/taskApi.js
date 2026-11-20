@@ -72,7 +72,7 @@ export const taskApi = {
   /**
    * Evaluate task submission (Mentor action)
    * @param {number|string} id
-   * @param {object} evalData { score, feedback, status }
+   * @param {object} evalData { feedback, status }
    * @returns {Promise<object>}
    */
   async evaluateTask(id, evalData) {

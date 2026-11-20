@@ -298,17 +298,11 @@ const MenteeDashboard = () => {
     );
   }, [tasks]);
 
-  // Evaluated tasks & dynamic average score
+  // Evaluated tasks
   const evaluatedTasks = useMemo(
-    () => tasks.filter((t) => typeof t.score === "number" && !isNaN(t.score)),
+    () => tasks.filter((t) => t.status === "complete" || (t.feedback && t.feedback.trim())),
     [tasks]
   );
-  const avgScore = useMemo(() => {
-    if (evaluatedTasks.length === 0) return null;
-    return Math.round(
-      evaluatedTasks.reduce((acc, t) => acc + t.score, 0) / evaluatedTasks.length
-    );
-  }, [evaluatedTasks]);
 
   // Overall Progress
   const completedCount = useMemo(
@@ -820,18 +814,7 @@ const handleSubmitTask = async (e) => {
             </div>
           </div> */}
 
-          {/* Average Assignment Score */}
-          {/* <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center flex-shrink-0">
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Mentor Rating</p>
-              <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">{avgScore !== null ? `${avgScore} / 100` : "N/A"}</h2>
-            </div>
-          </div> */}
+
         </div>
 
         {/* TAB 1: OVERVIEW */}
@@ -989,15 +972,9 @@ const handleSubmitTask = async (e) => {
                         <span className="font-bold text-sm text-slate-900 dark:text-white">
                           {recentEvaluatedTask.title}
                         </span>
-                        {recentEvaluatedTask.score !== null && recentEvaluatedTask.score !== undefined ? (
-                          <span className="font-black text-sm text-emerald-600 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-500/30">
-                            {recentEvaluatedTask.score} / 100
-                          </span>
-                        ) : (
-                          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
-                            {STATUS_LABELS[recentEvaluatedTask.status] || recentEvaluatedTask.status}
-                          </span>
-                        )}
+                        <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                          {STATUS_LABELS[recentEvaluatedTask.status] || recentEvaluatedTask.status}
+                        </span>
                       </div>
                       <p className="text-xs text-slate-600 dark:text-slate-200 mt-2 italic leading-relaxed">
                         &ldquo;{recentEvaluatedTask.feedback || "No feedback notes provided yet."}&rdquo;
@@ -1044,9 +1021,9 @@ const handleSubmitTask = async (e) => {
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500 dark:text-slate-300">Total Tasks Graded:</span>
+                      <span className="text-slate-500 dark:text-slate-300">Total Tasks Evaluated:</span>
                       <span className="font-semibold text-slate-800 dark:text-slate-100">
-                        {evaluatedTasks.length} Graded
+                        {evaluatedTasks.length} Evaluated
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -1235,7 +1212,7 @@ const handleSubmitTask = async (e) => {
                     <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-xs text-slate-500 dark:text-slate-300">
                       <span>Due: {formatDueDateTime(task.due_date)}</span>
                       <span className="font-bold uppercase text-[11px] text-slate-700 dark:text-slate-100">
-                        {task.score !== null && task.score !== undefined ? `Score: ${task.score}/100` : `Priority: ${task.priority}`}
+                        Priority: {task.priority}
                       </span>
                     </div>
 
@@ -1348,7 +1325,7 @@ const handleSubmitTask = async (e) => {
 
                 <div className="flex items-center gap-2">
                   <div className="px-3 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-500/20 border border-emerald-200 dark:border-emerald-500/30 text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                    {avgScore !== null ? `Average Score: ${avgScore} / 100` : "No ratings yet"}
+                    {feedbackTasks.length} Reviewed {feedbackTasks.length === 1 ? "Task" : "Tasks"}
                   </div>
                 </div>
               </div>
@@ -1373,15 +1350,9 @@ const handleSubmitTask = async (e) => {
                         </div>
 
                         <div className="flex items-center gap-2 self-start sm:self-auto">
-                          {task.score !== null && task.score !== undefined ? (
-                            <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30">
-                              Score: {task.score}/100
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30">
-                              {STATUS_LABELS[task.status] || task.status}
-                            </span>
-                          )}
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30">
+                            {STATUS_LABELS[task.status] || task.status}
+                          </span>
                         </div>
                       </div>
 
@@ -1535,11 +1506,9 @@ const handleSubmitTask = async (e) => {
             <div className="mt-4">
               <h4 className="font-bold text-slate-900 dark:text-white text-sm">{viewingFeedbackTask.title}</h4>
               <div className="mt-2 flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Grade:</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">
-                  {viewingFeedbackTask.score !== null && viewingFeedbackTask.score !== undefined
-                    ? `${viewingFeedbackTask.score}/100`
-                    : "Pending grade"}
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Status:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-xs uppercase">
+                  {STATUS_LABELS[viewingFeedbackTask.status] || viewingFeedbackTask.status}
                 </span>
               </div>
 

@@ -13,7 +13,8 @@ export const authApi = {
   },
 
   /**
-   * Refresh access token using the httpOnly refresh cookie (deduplicated)
+   * Refresh access token using THIS tab's user's httpOnly refresh cookie (deduplicated).
+   * The user id is read from sessionStorage inside refreshAccessToken().
    * @returns {Promise<{success: boolean, accessToken: string, token?: string, user: object}>}
    */
   async refresh() {
@@ -22,11 +23,12 @@ export const authApi = {
   },
 
   /**
-   * Log out the current device (revokes cookie refresh token & clears cookie)
+   * Log out this session only (revokes this user's refresh cookie & clears it)
+   * @param {number|string} userId
    * @returns {Promise<{success: boolean, message: string}>}
    */
-  async logout() {
-    const response = await apiClient.post('/users/logout');
+  async logout(userId) {
+    const response = await apiClient.post('/users/logout', { userId });
     return response.data;
   },
 

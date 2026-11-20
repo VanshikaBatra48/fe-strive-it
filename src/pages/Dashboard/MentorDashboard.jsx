@@ -153,7 +153,6 @@ const MentorDashboard = () => {
     assignedMentees,
     loading: menteesLoading,
     error: menteesError,
-    deleteMentee,
   } = useMentors(mentorUser.name);
 
   // Only database assigned mentees
@@ -192,7 +191,6 @@ const MentorDashboard = () => {
   // User Dropdown & Modals
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [viewingMentee, setViewingMentee] = useState(null);
-  const [deletingMentee, setDeletingMentee] = useState(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [evaluatingTask, setEvaluatingTask] = useState(null);
   const [assignError, setAssignError] = useState("");
@@ -256,7 +254,6 @@ const MentorDashboard = () => {
 
   // Evaluation Form (matches backend PATCH /api/tasks/:id/evaluate fields)
   const [evaluation, setEvaluation] = useState({
-    score: 90,
     feedback: "",
     status: "complete",
   });
@@ -277,7 +274,6 @@ const MentorDashboard = () => {
     setEvaluatingTask(task);
     setSelectedSubmission(null);
     setEvaluation({
-      score: task.score ?? 90,
       feedback: task.feedback || "",
       status: "complete",
       ...overrides,
@@ -361,27 +357,10 @@ const MentorDashboard = () => {
     [tasks]
   );
 
-  const avgScore = useMemo(() => {
-    const graded = tasks.filter((t) => typeof t.score === "number");
-    if (graded.length === 0) return null;
-    const sum = graded.reduce((acc, t) => acc + t.score, 0);
-    return Math.round((sum / graded.length) * 10) / 10;
-  }, [tasks]);
-
   const completionRate = useMemo(() => {
     if (tasks.length === 0) return 0;
     const done = tasks.filter((t) => t.status === "complete").length;
     return Math.round((done / tasks.length) * 100);
-  }, [tasks]);
-
-  const topPerformer = useMemo(() => {
-    const graded = tasks.filter((t) => typeof t.score === "number");
-    if (graded.length === 0) return null;
-    const best = graded.reduce((max, t) => (t.score > max.score ? t : max), graded[0]);
-    return {
-      name: best.mentee?.name || "Mentee",
-      score: best.score,
-    };
   }, [tasks]);
 
   const handleLogout = () => {
@@ -391,7 +370,7 @@ const MentorDashboard = () => {
 
   const handleOpenTaskFromNotification = (taskId, notificationItem) => {
     setActiveTab("tasks");
-    // A submission goes straight to the "Submitted" filter so it's easy to grade
+    // A submission goes straight to the "Submitted" filter so it's easy to review
     setTaskFilter(notificationItem?.type === "TASK_SUBMITTED" ? "submitted" : "All");
     mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -533,27 +512,16 @@ const MentorDashboard = () => {
       setEvalError("Evaluation feedback is required.");
       return;
     }
-    if (
-      evaluation.status === "complete" &&
-      (evaluation.score === "" || evaluation.score == null)
-    ) {
-      setEvalError("Score (0 - 100) is required when marking a task complete.");
-      return;
-    }
 
-    const gradedTaskId = evaluatingTask.id;
+    const evaluatedTaskId = evaluatingTask.id;
     const payload = {
       feedback: evaluation.feedback.trim(),
-      score:
-        evaluation.score === "" || evaluation.score == null
-          ? null
-          : Math.round(Number(evaluation.score)),
     };
 
     setActionLoading(true);
     try {
       // Always fetch fresh; the cached history may be stale
-      const historyResponse = await getTaskSubmissionHistory(gradedTaskId);
+      const historyResponse = await getTaskSubmissionHistory(evaluatedTaskId);
       const latest = getLatestSubmission(normalizeSubmissions(historyResponse));
       const latestStatus = String(latest?.status || "").toLowerCase();
 
@@ -564,12 +532,12 @@ const MentorDashboard = () => {
           await requestChangesApi(latest.id, payload);
         } else {
           // hold / in-progress etc. have no submission-level equivalent
-          const res = await evaluateTask(gradedTaskId, { status: evaluation.status, ...payload });
+          const res = await evaluateTask(evaluatedTaskId, { status: evaluation.status, ...payload });
           if (!res.success) throw new Error(res.error || "Failed to submit evaluation");
         }
       } else if (!latest) {
         // Legacy task with no versioned submission
-        const res = await evaluateTask(gradedTaskId, { status: evaluation.status, ...payload });
+        const res = await evaluateTask(evaluatedTaskId, { status: evaluation.status, ...payload });
         if (!res.success) throw new Error(res.error || "Failed to submit evaluation");
       } else {
         throw new Error("The latest submission has already been reviewed.");
@@ -579,11 +547,11 @@ const MentorDashboard = () => {
       closeEvaluationModal();
       showToast("success", "Evaluation submitted successfully!");
 
-      // Refresh in the background; failures here shouldn't affect the grade
+      // Refresh in the background; failures here shouldn't affect the evaluation
       try {
         await refetchTasks();
-        if (expandedHistory === gradedTaskId) {
-          await fetchSubmissionHistory(gradedTaskId);
+        if (expandedHistory === evaluatedTaskId) {
+          await fetchSubmissionHistory(evaluatedTaskId);
         }
       } catch (refreshErr) {
         console.error("Refresh after evaluation failed:", refreshErr);
@@ -595,42 +563,6 @@ const MentorDashboard = () => {
     } finally {
       setActionLoading(false);
     }
-  };
-
-  // Delete single task
-  // const handleDeleteTask = async (task) => {
-  //   if (!window.confirm(`Delete task "${task.title}"?`)) return;
-  //   const res = await deleteTask(task.id);
-  //   if (res.success) {
-  //     showToast("success", `Task "${task.title}" deleted.`);
-  //   } else {
-  //     showToast("error", res.error || "Failed to delete task");
-  //   }
-  // };
-
-  // Confirm delete mentee + cascade tasks
-  const handleConfirmDeleteMentee = async () => {
-    if (!deletingMentee) return;
-    const target = deletingMentee;
-    setActionLoading(true);
-    const res = await deleteMentee(target.id);
-    if (res.success) {
-      removeTasksByMenteeId(target.id);
-      await refetchTasks();
-      if (viewingMentee?.id === target.id) {
-        setViewingMentee(null);
-      }
-      setDeletingMentee(null);
-      const countMsg =
-        res.deletedTasksCount > 0
-          ? ` (${res.deletedTasksCount} assigned task${res.deletedTasksCount > 1 ? "s" : ""} deleted)`
-          : "";
-      showToast("success", `${target.name} has been deleted${countMsg}.`);
-    } else {
-      setDeletingMentee(null);
-      showToast("error", res.error || "Failed to delete mentee");
-    }
-    setActionLoading(false);
   };
 
   return (
@@ -946,20 +878,7 @@ const MentorDashboard = () => {
             </div>
           </div>
 
-          {/* Average Performance */}
-          {/* <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center flex-shrink-0">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Avg. Score</p>
-              <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">
-                {avgScore !== null ? `${avgScore}%` : "N/A"}
-              </h2>
-            </div>
-          </div> */}
+
         </div>
 
         {/* TAB 1: DASHBOARD OVERVIEW */}
@@ -1042,7 +961,7 @@ const MentorDashboard = () => {
                           onClick={() => openEvaluationModal(task)}
                           className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer flex-shrink-0"
                         >
-                          Review & Grade
+                          Review Submission
                         </button>
                       </div>
                     ))}
@@ -1160,21 +1079,12 @@ const MentorDashboard = () => {
 
                     {/* Actions */}
                     <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700/80 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => setViewingMentee(mentee)}
-                          className="px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-                        >
-                          View Details
-                        </button>
-                        <button
-                          onClick={() => setDeletingMentee(mentee)}
-                          className="px-2.5 py-1.5 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
-                          title="Delete mentee and all their assigned tasks"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => setViewingMentee(mentee)}
+                        className="px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                      >
+                        View Details
+                      </button>
                       <button
                         onClick={() => openAssignModal(mentee.id)}
                         className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer shadow-xs"
@@ -1248,7 +1158,6 @@ const MentorDashboard = () => {
                     <th className="px-6 py-3.5">Due Date</th>
                     <th className="px-6 py-3.5">Time</th>
                     <th className="px-6 py-3.5">Status</th>
-                    <th className="px-6 py-3.5">Score</th>
                     <th className="px-6 py-3.5 text-right">Action</th>
                   </tr>
                 </thead>
@@ -1309,10 +1218,6 @@ const MentorDashboard = () => {
                           </span>
                         </td>
 
-                        <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-700 dark:text-slate-100">
-                          {task.score !== null && task.score !== undefined ? `${task.score}/100` : "-"}
-                        </td>
-
                         <td className="px-6 py-4 whitespace-nowrap text-right">
                           <div className="inline-flex items-center gap-2 justify-end">
                             {task.status === "submitted" || (task.status === "needs-revision" && task.submission_url) ? (
@@ -1320,13 +1225,12 @@ const MentorDashboard = () => {
                                 onClick={() => openEvaluationModal(task)}
                                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer"
                               >
-                                Grade & Feedback
+                                Review & Feedback
                               </button>
                             ) : task.status === "complete" || task.feedback ? (
                               <button
                                 onClick={() =>
                                   openEvaluationModal(task, {
-                                    score: task.score ?? "",
                                     status: task.status === "needs-revision" ? "needs-revision" : "complete",
                                   })
                                 }
@@ -1454,12 +1358,12 @@ const MentorDashboard = () => {
                 </div>
 
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-700">
-                  <span className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase">Average Assignment Score</span>
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-300 uppercase">Completed Tasks</span>
                   <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-                    {avgScore !== null ? `${avgScore} / 100` : "No scores yet"}
+                    {tasks.filter((t) => t.status === "complete").length}
                   </p>
-                  <p className="text-xs text-indigo-600 dark:text-indigo-300 mt-1">
-                    {topPerformer ? `Highest: ${topPerformer.name} (${topPerformer.score}/100)` : "Evaluate submissions to see scores"}
+                  <p className="text-xs text-emerald-600 dark:text-emerald-300 mt-1">
+                    {tasks.filter((t) => t.status === "submitted").length} awaiting review
                   </p>
                 </div>
 
@@ -1827,35 +1731,18 @@ const MentorDashboard = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                    Score (0 - 100){evaluation.status === "complete" ? " *" : ""}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    required={evaluation.status === "complete"}
-                    value={evaluation.score}
-                    onChange={(e) => setEvaluation({ ...evaluation, score: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                    Status Outcome
-                  </label>
-                  <select
-                    value={evaluation.status}
-                    onChange={(e) => setEvaluation({ ...evaluation, status: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
-                  >
-                    <option value="complete">Approved</option>
-                    <option value="needs-revision">Need Revision</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                  Status Outcome
+                </label>
+                <select
+                  value={evaluation.status}
+                  onChange={(e) => setEvaluation({ ...evaluation, status: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                >
+                  <option value="complete">Approved</option>
+                  <option value="needs-revision">Need Revision</option>
+                </select>
               </div>
 
               <div>
@@ -1956,68 +1843,12 @@ const MentorDashboard = () => {
               );
             })()}
 
-            <div className="mt-6 flex items-center justify-between gap-2">
-              <button
-                onClick={() => setDeletingMentee(viewingMentee)}
-                className="px-3.5 py-2 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg text-xs font-semibold cursor-pointer"
-              >
-                Delete Mentee
-              </button>
+            <div className="mt-6 flex items-center justify-end gap-2">
               <button
                 onClick={() => setViewingMentee(null)}
                 className="px-4 py-2 bg-slate-800 dark:bg-slate-700 text-white rounded-lg text-xs font-semibold hover:bg-slate-900 cursor-pointer"
               >
                 Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: CONFIRM DELETE MENTEE (AND CASCADE TASKS) */}
-      {deletingMentee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6 text-slate-800 dark:text-slate-100">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Delete Mentee?
-                </h3>
-                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1.5 leading-relaxed">
-                  Are you sure you want to delete{" "}
-                  <span className="font-semibold text-slate-900 dark:text-white">
-                    {deletingMentee.name}
-                  </span>
-                  ? All{" "}
-                  <span className="font-semibold text-rose-600 dark:text-rose-400">
-                    {menteeStatsMap[deletingMentee.id]?.taskCount || 0} task(s)
-                  </span>{" "}
-                  assigned to this mentee will also be permanently deleted.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setDeletingMentee(null)}
-                disabled={actionLoading}
-                className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDeleteMentee}
-                disabled={actionLoading}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
-              >
-                {actionLoading ? "Deleting..." : "Delete Mentee & Tasks"}
               </button>
             </div>
           </div>

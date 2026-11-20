@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 
 // =====================================================
@@ -6,6 +5,12 @@ import axios from 'axios';
 // =====================================================
 
 export const getApiBaseUrl = () => {
+  if (
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ) {
+    return 'http://localhost:3000/api';
+  }
   return (
     import.meta.env.VITE_API_BASE_URL ||
     import.meta.env.VITE_API_URL ||
@@ -38,6 +43,16 @@ let refreshPromise = null;
 // Prevents multiple unauthorized events and redirects.
 let logoutInProgress = false;
 
+// Id of the user logged in IN THIS TAB (used to pick the right refresh cookie).
+const getStoredUserId = () => {
+  try {
+    const raw = sessionStorage.getItem('user');
+    return raw ? JSON.parse(raw)?.id ?? null : null;
+  } catch {
+    return null;
+  }
+};
+
 // =====================================================
 // 4. AUTH ENDPOINT DETECTION
 // =====================================================
@@ -58,8 +73,8 @@ export function clearAuthAndRedirect() {
   logoutInProgress = true;
 
   // Remove client-side authentication information.
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('user');
 
   // Notify AuthContext and Socket.IO listeners.
   window.dispatchEvent(
@@ -78,12 +93,14 @@ export function clearAuthAndRedirect() {
 // =====================================================
 
 export async function refreshAccessToken() {
+  const userId = getStoredUserId();
+
   // Reuse an existing refresh request if one is running.
   if (!refreshPromise) {
     refreshPromise = axios
       .post(
         `${API_BASE_URL}/users/refresh`,
-        {},
+        userId ? { userId } : {},
         {
           withCredentials: true,
           headers: {
@@ -104,10 +121,10 @@ export async function refreshAccessToken() {
         }
 
         // Store the new access token.
-        localStorage.setItem('token', newToken);
+        sessionStorage.setItem('token', newToken);
 
         if (response.data?.user) {
-          localStorage.setItem(
+          sessionStorage.setItem(
             'user',
             JSON.stringify(response.data.user)
           );
@@ -140,7 +157,7 @@ export async function refreshAccessToken() {
 
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     // Do not attach an old token to login/logout requests.
     if (!isAuthEndpoint(config.url || '') && token) {
@@ -161,9 +178,9 @@ apiClient.interceptors.response.use(
   (response) => {
     // A successful login starts a new authenticated session.
     if (isAuthEndpoint(response.config?.url || '') &&
-        /\/users\/login\/?$/.test(
-          (response.config?.url || '').split('?')[0]
-        )) {
+      /\/users\/login\/?$/.test(
+        (response.config?.url || '').split('?')[0]
+      )) {
       logoutInProgress = false;
     }
 
@@ -208,7 +225,7 @@ apiClient.interceptors.response.use(
       // AVOID UNNECESSARY REFRESH REQUESTS
       // -------------------------------------------------
 
-      const currentToken = localStorage.getItem('token');
+      const currentToken = sessionStorage.getItem('token');
 
       const requestToken =
         originalRequest.headers?.Authorization;
@@ -262,7 +279,7 @@ apiClient.interceptors.response.use(
     if (
       status === 403 &&
       responseData?.code ===
-        'FIRST_LOGIN_PASSWORD_CHANGE_REQUIRED'
+      'FIRST_LOGIN_PASSWORD_CHANGE_REQUIRED'
     ) {
       window.dispatchEvent(
         new CustomEvent('auth:first-login-required', {
@@ -280,7 +297,7 @@ apiClient.interceptors.response.use(
 // =====================================================
 
 export const getAccessToken = () => {
-  return localStorage.getItem('token');
+  return sessionStorage.getItem('token');
 };
 
 export default apiClient;

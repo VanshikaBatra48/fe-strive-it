@@ -1,52 +1,68 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams  } from 'react-router-dom';
-import useAuth from '../hooks/useAuth';
-import ThemeToggle from '../components/ThemeToggle';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { chatApi } from '../api/chatApi';
-import { useChatSocket } from '../hooks/useChatSocket';
+import useAuth from '../hooks/useAuth';
+import useChatSocket from '../hooks/useChatSocket';
 import ChatWindow from '../components/chat/chatWindow';
-import CreateGroupModal from '../components/chat/createGroupModal';
 import MembersPanel from '../components/chat/membersPanel';
-import '../components/chat/chat.css';
+import CreateGroupModal from '../components/chat/createGroupModal';
+import ThemeToggle from '../components/ThemeToggle';
 import { socket } from '../lib/socket';
+import '../components/chat/chat.css';
+
+function formatTimestamp(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
+}
 
 export default function ChatPage() {
+  const { user: me } = useAuth();
   const navigate = useNavigate();
+
   const [searchParams] = useSearchParams();
   const notificationGroupId = searchParams.get('groupId');
-  const { user } = useAuth();
-  const me = { id: user?.id, role: user?.role, name: user?.name };
-  const isManager = me.role === 'admin' || me.role === 'mentor';
+  const handledNotificationGroupRef = useRef(null);
 
   const [groups, setGroups] = useState([]);
-  const [showAll, setShowAll] = useState(false); // admin: list every group for management
   const [activeId, setActiveId] = useState(null);
-  const [messages, setMessages] = useState({}); // { [groupId]: Message[] }
-  const [hasMore, setHasMore] = useState({}); // { [groupId]: boolean }
-  const [typing, setTyping] = useState({}); // { [groupId]: name }
-  const [showCreate, setShowCreate] = useState(false);
+  const [messages, setMessages] = useState({});
+  const [hasMore, setHasMore] = useState({});
+  const [typing, setTyping] = useState({});
   const [showMembers, setShowMembers] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [searchFilter, setSearchFilter] = useState('');
 
-  // Refs so socket callbacks (created once) always see current values
   const activeIdRef = useRef(null);
   const showAllRef = useRef(false);
 
   useEffect(() => {
     activeIdRef.current = activeId;
+  }, [activeId]);
+
+  useEffect(() => {
     showAllRef.current = showAll;
-  }, [activeId, showAll]);
-  const loadedRef = useRef(new Set());
+  }, [showAll]);
+
   const typingTimers = useRef({});
+  const loadedRef = useRef(new Set());
 
-  const handledNotificationGroupRef = useRef(null);
+  const isManager = me.role === 'admin' || me.role === 'mentor';
 
-  // ---------- Loading ----------
   const loadGroups = useCallback(async () => {
-    const data = await chatApi.listGroups(showAllRef.current);
-    setGroups(data);
-    // If the open group disappeared (we were removed or group was deleted), close it
+    const list = await chatApi.listGroups(showAllRef.current);
+    setGroups(list);
     setActiveId((a) => {
-      if (a && !data.some((g) => g.id === a)) {
+      if (a && !list.some((g) => g.id === a)) {
         setShowMembers(false);
         return null;
       }
@@ -85,7 +101,7 @@ export default function ChatPage() {
     onMessage: (m) => {
       setMessages((prev) => {
         const list = prev[m.groupId];
-        if (!list || list.some((x) => x.id === m.id)) return prev; // not loaded yet, or duplicate
+        if (!list || list.some((x) => x.id === m.id)) return prev;
         return { ...prev, [m.groupId]: [...list, m] };
       });
 
@@ -150,7 +166,6 @@ export default function ChatPage() {
       );
     },
 
-    // After a dropped connection: refetch what we may have missed
     onReconnect: () => {
       loadGroups().catch(() => { });
       const id = activeIdRef.current;
@@ -161,13 +176,6 @@ export default function ChatPage() {
   // ---------- Actions ----------
   const openGroup = useCallback((g) => {
     setActiveId(g.id);
-    setShowMembers(g.myRole === null);
-
-    // Admin viewing a group without membership
-    if (g.myRole === null) {
-      socket.emit('chat:inactive');
-      return;
-    }
 
     // Tell the backend that this user is viewing this group
     socket.emit('chat:active', {
@@ -175,7 +183,9 @@ export default function ChatPage() {
     });
 
     if (loadedRef.current.has(g.id)) {
-      markReadUpTo(g.id, messages[g.id] ?? []);
+      if (g.myRole !== null) {
+        markReadUpTo(g.id, messages[g.id] ?? []);
+      }
     } else {
       loadMessages(g.id).catch((err) => {
         console.error('Failed to load messages:', err);
@@ -186,7 +196,6 @@ export default function ChatPage() {
   // Open the group from a notification link (?groupId=...)
   useEffect(() => {
     if (!notificationGroupId || groups.length === 0) return;
-
     if (handledNotificationGroupRef.current === notificationGroupId) return;
 
     const group = groups.find(
@@ -222,7 +231,6 @@ export default function ChatPage() {
   const send = async (body, files) => {
     if (!activeId) return;
     const msg = await chatApi.sendMessage(activeId, body, files);
-    // The socket event also arrives; onMessage de-duplicates by id
     setMessages((prev) => {
       const list = prev[activeId] ?? [];
       return list.some((x) => x.id === msg.id) ? prev : { ...prev, [activeId]: [...list, msg] };
@@ -240,27 +248,36 @@ export default function ChatPage() {
 
   const active = groups.find((g) => g.id === activeId) ?? null;
 
+  // Filter groups in sidebar
+  const filteredGroups = useMemo(() => {
+    if (!searchFilter.trim()) return groups;
+    const q = searchFilter.toLowerCase();
+    return groups.filter((g) => g.name?.toLowerCase().includes(q));
+  }, [groups, searchFilter]);
+
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 p-3 sm:p-4 flex flex-col gap-3 font-sans">
+    <div className="h-screen max-h-screen bg-slate-100 dark:bg-slate-900 p-2 sm:p-4 flex flex-col gap-2.5 font-sans overflow-hidden">
       {/* Top Header Bar */}
-      <header className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-800 px-4 sm:px-5 py-3 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700">
+      <header className="flex items-center justify-between gap-3 bg-white dark:bg-slate-800 px-4 sm:px-5 py-2.5 rounded-2xl shadow-xs border border-slate-200/90 dark:border-slate-700/80 flex-shrink-0">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => navigate('/dashboard')}
-            className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition-colors cursor-pointer bg-slate-100 dark:bg-slate-700/60 hover:bg-slate-200 dark:hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-200/80 dark:border-slate-600"
+            className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer bg-slate-100 dark:bg-slate-700/60 hover:bg-slate-200 dark:hover:bg-slate-700 px-3 py-1.5 rounded-xl border border-slate-200/80 dark:border-slate-600 shadow-2xs"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
             <span>Dashboard</span>
           </button>
-          <div className="h-5 w-px bg-slate-300 dark:bg-slate-600" />
+          <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
           <h1 className="text-sm sm:text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            TMS Messaging & Groups
+            <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 flex items-center justify-center">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+            <span>TMS Team Messaging</span>
           </h1>
         </div>
 
@@ -268,7 +285,7 @@ export default function ChatPage() {
           <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
             <span>Signed in as</span>
             <strong className="text-slate-800 dark:text-slate-200">{me.name || 'User'}</strong>
-            <span className="capitalize px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+            <span className="capitalize px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60">
               {me.role}
             </span>
           </div>
@@ -276,54 +293,165 @@ export default function ChatPage() {
         </div>
       </header>
 
-      {/* Main Chat Layout (border and shadow come from chat.css) */}
-      <div className="chat-layout">
-        <aside className="chat-sidebar">
-          <div className="chat-sidebar-head">
-            <strong>Groups</strong>
-            {isManager && (
-              <button type="button" onClick={() => setShowCreate(true)}>
-                + New
-              </button>
+      {/* Main Chat Layout */}
+      <div className="flex-1 flex overflow-hidden rounded-2xl border border-slate-200/90 dark:border-slate-700/80 bg-white dark:bg-slate-800 shadow-sm relative">
+        {/* Sidebar */}
+        <aside className="w-72 sm:w-80 flex flex-col border-r border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#111827] flex-shrink-0">
+          {/* Sidebar Top: Title & New Group */}
+          <div className="p-3.5 pb-2 border-b border-slate-100 dark:border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Conversations</h2>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
+                  {groups.length}
+                </span>
+              </div>
+              {isManager && (
+                <button
+                  type="button"
+                  onClick={() => setShowCreate(true)}
+                  className="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                >
+                  <span className="text-sm leading-none font-bold">+</span>
+                  <span>New Group</span>
+                </button>
+              )}
+            </div>
+
+            {/* Search Input Filter */}
+            <div className="relative">
+              <svg
+                className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search groups…"
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/80 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+              />
+            </div>
+
+            {/* Admin Manage Toggle */}
+            {me.role === 'admin' && (
+              <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer select-none pt-0.5">
+                <input
+                  type="checkbox"
+                  checked={showAll}
+                  onChange={(e) => setShowAll(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded text-indigo-600 accent-indigo-600 focus:ring-indigo-500/20"
+                />
+                <span>Show all groups (admin management)</span>
+              </label>
             )}
           </div>
 
-          {me.role === 'admin' && (
-            <label className="chat-toggle">
-              <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-              Show all groups (manage)
-            </label>
-          )}
+          {/* Group List */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {filteredGroups.map((g) => {
+              const isSelected = g.id === activeId;
+              return (
+                <div
+                  key={g.id}
+                  onClick={() => openGroup(g)}
+                  className={`p-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-3 text-left relative ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'hover:bg-slate-100 dark:hover:bg-slate-800/70 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  {/* Group Avatar */}
+                  <div
+                    className={`w-10 h-10 rounded-xl font-bold text-sm flex items-center justify-center flex-shrink-0 shadow-2xs ${
+                      isSelected
+                        ? 'bg-white/20 text-white'
+                        : 'bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 border border-indigo-100/60 dark:border-slate-700'
+                    }`}
+                  >
+                    #
+                  </div>
 
-          <ul>
-            {groups.map((g) => (
-              <li
-                key={g.id}
-                className={g.id === activeId ? 'chat-group chat-group--active' : 'chat-group'}
-                onClick={() => openGroup(g)}
-              >
-                <div className="chat-group-name">
-                  {g.name}
-                  {g.status === 'archived' && <span className="chat-badge">Archived</span>}
-                  {!!g.unreadCount && <span className="chat-unread">{g.unreadCount}</span>}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <span
+                        className={`text-xs font-bold truncate ${
+                          isSelected ? 'text-white' : 'text-slate-900 dark:text-slate-100'
+                        }`}
+                      >
+                        {g.name}
+                      </span>
+
+                      {g.lastActivityAt && (
+                        <span
+                          className={`text-[10px] flex-shrink-0 ${
+                            isSelected ? 'text-white/75' : 'text-slate-400 dark:text-slate-400'
+                          }`}
+                        >
+                          {formatTimestamp(g.lastActivityAt)}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-1">
+                      <p
+                        className={`text-[11px] truncate flex-1 ${
+                          isSelected ? 'text-white/80' : 'text-slate-500 dark:text-slate-400'
+                        }`}
+                      >
+                        {g.lastMessage ? (
+                          g.lastMessage.deleted ? (
+                            <span className="italic">Message deleted</span>
+                          ) : (
+                            g.lastMessage.body || '📎 Attachment'
+                          )
+                        ) : g.myRole === null ? (
+                          `${g.memberCount ?? 0} members · not a member`
+                        ) : (
+                          'No messages yet'
+                        )}
+                      </p>
+
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {g.status === 'archived' && (
+                          <span
+                            className={`text-[9px] font-semibold px-1.5 py-0.2 rounded ${
+                              isSelected
+                                ? 'bg-white/20 text-white'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            Archived
+                          </span>
+                        )}
+
+                        {!!g.unreadCount && (
+                          <span className="bg-amber-500 text-slate-900 text-[10px] font-black rounded-full px-1.5 py-0.2 shadow-2xs">
+                            {g.unreadCount}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="chat-group-last">
-                  {g.myRole === null
-                    ? `${g.memberCount ?? 0} members · not a member`
-                    : g.lastMessage
-                      ? g.lastMessage.deleted
-                        ? 'Message deleted'
-                        : g.lastMessage.body || '📎 Attachment'
-                      : 'No messages yet'}
-                </div>
-              </li>
-            ))}
-            {groups.length === 0 && <li className="chat-empty">You are not in any group yet.</li>}
-          </ul>
+              );
+            })}
+
+            {filteredGroups.length === 0 && (
+              <div className="py-12 text-center text-xs text-slate-400 dark:text-slate-500 px-4">
+                {searchFilter ? 'No groups found matching your search.' : 'You are not in any chat group yet.'}
+              </div>
+            )}
+          </div>
         </aside>
 
-        <main className="chat-main">
-          {active && active.myRole !== null ? (
+        {/* Main Chat Area */}
+        <main className="flex-1 flex flex-col min-w-0 bg-slate-50/60 dark:bg-slate-900/50 relative">
+          {active ? (
             <ChatWindow
               group={active}
               me={me}
@@ -337,14 +465,21 @@ export default function ChatPage() {
               onToggleMembers={() => setShowMembers((s) => !s)}
             />
           ) : (
-            <div className="chat-placeholder">
-              {active
-                ? 'Open the members panel to manage this group.'
-                : 'Select a group to start chatting'}
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400 dark:text-slate-500">
+              <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-4 shadow-xs">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.75">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">Select a Conversation</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mt-1.5 leading-relaxed">
+                Choose a channel or team from the sidebar to start collaborating, share files, and discuss tasks.
+              </p>
             </div>
           )}
         </main>
 
+        {/* Members / Group Info Drawer */}
         {active && showMembers && (
           <MembersPanel
             groupId={active.id}
@@ -358,20 +493,21 @@ export default function ChatPage() {
             }}
           />
         )}
-
-        {showCreate && (
-          <CreateGroupModal
-            meId={me.id}
-            onClose={() => setShowCreate(false)}
-            onCreated={async (id) => {
-              setShowCreate(false);
-              await loadGroups();
-              setActiveId(id);
-              loadMessages(id).catch(() => { });
-            }}
-          />
-        )}
       </div>
+
+      {/* Create Group Modal */}
+      {showCreate && (
+        <CreateGroupModal
+          meId={me.id}
+          onClose={() => setShowCreate(false)}
+          onCreated={async (id) => {
+            setShowCreate(false);
+            await loadGroups();
+            setActiveId(id);
+            loadMessages(id).catch(() => { });
+          }}
+        />
+      )}
     </div>
   );
 }
