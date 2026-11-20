@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect, Fragment } from "react";
+import { useState, useMemo, useRef, useEffect,useCallback,  Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../../components/ThemeToggle";
 import NotificationBell from "../../components/NotificationBell";
@@ -15,6 +15,10 @@ import {
 import { formatHours } from "../../utils/formatDuration";
 
 import SubmissionStatus from "../../components/taskSubmission/SubmissionStatus";
+
+import BlockerConversationModal from "../../components/BlockerConversationModal";
+import { listBlockersApi, getBlockerApi, sendBlockerMessageApi } from "../../api/blockerApi";
+
 const ALLOWED_TYPES = [
   "application/pdf",
   "application/msword",
@@ -58,6 +62,7 @@ const STATUS_LABELS = {
   "needs-revision": "Needs Revision",
   complete: "Complete",
   hold: "On Hold",
+  blocker: "Blocker"
 };
 
 // Shows the due date AND time, e.g. "14 Nov 2026, 6:30 pm"
@@ -165,7 +170,7 @@ const MentorDashboard = () => {
     assignTask,
     evaluateTask,
     // deleteTask,
-    removeTasksByMenteeId,
+   // removeTasksByMenteeId,
     refetch: refetchTasks,
   } = useTasks();
 
@@ -180,6 +185,122 @@ const MentorDashboard = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [notification, setNotification] = useState(null);
 
+    // ---- Blocker state (mentor can view and reply, never resolve) ----
+  const [blockers, setBlockers] = useState([]);
+  const [blockersLoading, setBlockersLoading] = useState(false);
+  const [blockersError, setBlockersError] = useState("");
+  const [blockerFilter, setBlockerFilter] = useState("open"); // open | resolved | All
+  const [conversation, setConversation] = useState(null);
+  const [showConversationModal, setShowConversationModal] = useState(false);
+  const [conversationLoading, setConversationLoading] = useState(false);
+  const [conversationError, setConversationError] = useState("");
+  const [chatInput, setChatInput] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const openConversationIdRef = useRef(null);
+
+  const loadBlockers = useCallback(async () => {
+    try {
+      setBlockersLoading(true);
+      const res = await listBlockersApi();
+      setBlockers(Array.isArray(res?.data) ? res.data : []);
+      setBlockersError("");
+    } catch (err) {
+      setBlockersError(err.response?.data?.message || err.message || "Failed to load blockers");
+    } finally {
+      setBlockersLoading(false);
+    }
+  }, []);
+
+  const reloadConversation = useCallback(async (conversationId) => {
+    try {
+      const res = await getBlockerApi(conversationId);
+      setConversation(res.data);
+      setConversationError("");
+    } catch (err) {
+      setConversationError(
+        err.response?.data?.message || err.message || "Failed to load conversation"
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBlockers();
+  }, [loadBlockers]);
+
+  useEffect(() => {
+    openConversationIdRef.current = showConversationModal ? conversation?.id ?? null : null;
+  }, [conversation, showConversationModal]);
+
+  // Live updates from BLOCKER_* notifications
+  useEffect(() => {
+    const onBlockerNotification = (n) => {
+      if (!String(n?.type || "").startsWith("BLOCKER_")) return;
+      loadBlockers();
+      const openId = openConversationIdRef.current;
+      if (openId && Number(n?.data?.conversationId) === Number(openId)) {
+        reloadConversation(openId);
+      }
+    };
+    socket.on("notification:new", onBlockerNotification);
+    return () => socket.off("notification:new", onBlockerNotification);
+  }, [loadBlockers, reloadConversation]);
+
+  const openBlockersCount = useMemo(
+    () => blockers.filter((b) => b.status === "open").length,
+    [blockers]
+  );
+
+  const filteredBlockers = useMemo(
+    () => blockers.filter((b) => blockerFilter === "All" || b.status === blockerFilter),
+    [blockers, blockerFilter]
+  );
+
+    const blockerByTask = useMemo(() => {
+    const map = {};
+    for (const b of blockers) {
+      if (!map[b.taskId]) map[b.taskId] = b; // list is newest-first
+    }
+    return map;
+  }, [blockers]);
+
+  const handleOpenConversation = async (conversationId) => {
+    if (!conversationId) return;
+    setConversation(null);
+    setConversationError("");
+    setChatInput("");
+    setShowConversationModal(true);
+    setConversationLoading(true);
+    await reloadConversation(conversationId);
+    setConversationLoading(false);
+  };
+
+  const closeConversationModal = () => {
+    setShowConversationModal(false);
+    setConversation(null);
+    setChatInput("");
+    setConversationError("");
+  };
+
+  const handleSendMessage = async (e) => {
+    e?.preventDefault?.();
+    const text = chatInput.trim();
+    if (!conversation || !text || sendingMessage) return;
+
+    setSendingMessage(true);
+    try {
+      const res = await sendBlockerMessageApi(conversation.id, text);
+      if (res.success === false) throw new Error(res.message || "Failed to send message");
+      setChatInput("");
+      await Promise.all([reloadConversation(conversation.id), loadBlockers()]);
+    } catch (error) {
+      setConversationError(
+        error.response?.data?.message || error.message || "Failed to send message"
+      );
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
   // State
   const [activeTab, setActiveTab] = useState("dashboard"); // "dashboard", "mentees", "tasks", "reports"
 
@@ -187,6 +308,36 @@ const MentorDashboard = () => {
   const [menteeSearch, setMenteeSearch] = useState("");
   const [menteeFilter, setMenteeFilter] = useState("All");
   const [taskFilter, setTaskFilter] = useState("All");
+
+    // ---- Notification -> highlight task ----
+  const [highlightedTaskId, setHighlightedTaskId] = useState(null);
+  const [highlightKey, setHighlightKey] = useState(0);
+  const highlightTimerRef = useRef(null);
+
+  const highlightTask = (taskId) => {
+    const id = Number(taskId);
+    if (!id) return;
+
+    setActiveTab("tasks");
+    setTaskFilter("All");
+    setHighlightedTaskId(id);
+    setHighlightKey((k) => k + 1);
+
+    clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(() => setHighlightedTaskId(null), 2500);
+  };
+
+  useEffect(() => {
+    if (!highlightedTaskId) return;
+    const t = setTimeout(() => {
+      document
+        .getElementById(`task-${highlightedTaskId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    return () => clearTimeout(t);
+  }, [highlightedTaskId, highlightKey]);
+
+  useEffect(() => () => clearTimeout(highlightTimerRef.current), []);
 
   // User Dropdown & Modals
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -209,6 +360,8 @@ const MentorDashboard = () => {
   const [files, setFiles] = useState([]);
   const [fileError, setFileError] = useState("");
   const fileInputRef = useRef(null);
+
+
 
   const addFiles = (incoming) => {
     setFileError("");
@@ -368,12 +521,17 @@ const MentorDashboard = () => {
     navigate("/");
   };
 
-  const handleOpenTaskFromNotification = (taskId, notificationItem) => {
+    const handleOpenTaskFromNotification = (taskId, notificationItem) => {
+    highlightTask(taskId || notificationItem?.data?.taskId);
+
     setActiveTab("tasks");
     // A submission goes straight to the "Submitted" filter so it's easy to review
     setTaskFilter(notificationItem?.type === "TASK_SUBMITTED" ? "submitted" : "All");
-    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-  };
+    // A submission goes straight to the "Submitted" filter so it's easy to grade
+    // setTaskFilter(type === "TASK_SUBMITTED" ? "submitted" : "All");
+    // mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
 
   const openAssignModal = (preferredMenteeId = "") => {
     setDateError("");
@@ -648,7 +806,28 @@ const MentorDashboard = () => {
                 </span>
               )}
             </button>
-
+                        <button
+              onClick={() => {
+                setActiveTab("blockers");
+                mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "blockers"
+                  ? "bg-indigo-600 text-white shadow-xs"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                }`}
+            >
+              <div className="flex items-center gap-3.5">
+                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>Blockers</span>
+              </div>
+              {openBlockersCount > 0 && (
+                <span className="bg-rose-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+                  {openBlockersCount}
+                </span>
+              )}
+            </button>
             
 
             <button
@@ -1121,7 +1300,7 @@ const MentorDashboard = () => {
 
               <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
                 <div className="flex flex-wrap bg-slate-100 dark:bg-slate-700 p-0.5 rounded-lg text-xs font-medium">
-                  {["All", "in-progress", "submitted", "needs-revision", "complete", "hold"].map((filter) => (
+                  {["All", "in-progress", "submitted", "needs-revision", "complete", "hold" , "blocker"].map((filter) => (
                     <button
                       key={filter}
                       onClick={() => setTaskFilter(filter)}
@@ -1164,7 +1343,14 @@ const MentorDashboard = () => {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700/80 text-xs">
                   {filteredTasks.map((task) => (
                     <Fragment key={task.id}>
-                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors">
+                                            <tr
+                        id={`task-${task.id}`}
+                        className={`transition-all duration-500 ${
+                          highlightedTaskId === task.id
+                            ? "ring-1 ring-inset ring-blue-700"
+                            : "hover:bg-slate-50/60 dark:hover:bg-slate-700/40"
+                        }`}
+                      >
                         <td className="px-6 py-4 max-w-xs">
                           <div className="flex items-center gap-2">
                             <p className="font-bold text-slate-900 dark:text-white text-sm">{task.title}</p>
@@ -1203,7 +1389,8 @@ const MentorDashboard = () => {
 
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
-                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold inline-block border ${task.status === "complete"
+                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold inline-block border ${
+                              task.status === "complete"
                                 ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-500/30"
                                 : task.status === "submitted"
                                   ? "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-500/30"
@@ -1211,8 +1398,10 @@ const MentorDashboard = () => {
                                     ? "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200/60 dark:border-rose-500/30"
                                     : task.status === "hold"
                                       ? "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600"
+                                      : task.status === "blocker"
+                                        ? "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200/60 dark:border-rose-500/30"
                                       : "bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-200/60 dark:border-blue-500/30"
-                              }`}
+                                      }`}
                           >
                             {STATUS_LABELS[task.status] || task.status}
                           </span>
@@ -1242,22 +1431,21 @@ const MentorDashboard = () => {
                               <span className="text-slate-400 dark:text-slate-500 italic">Awaiting submission</span>
                             )}
 
+                            {blockerByTask[task.id] && (
+                              <button
+                                onClick={() => handleOpenConversation(blockerByTask[task.id].id)}
+                                className="text-xs font-semibold text-rose-600 dark:text-rose-300 hover:underline cursor-pointer"
+                              >
+                                {blockerByTask[task.id].status === "open" ? "Blocker Chat" : "Blocker History"}
+                              </button>
+                            )}
+
                             <button
                               onClick={() => toggleHistory(task.id)}
                               className="text-xs font-semibold text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer"
                             >
                               {expandedHistory === task.id ? "Hide History ↑" : "History ↓"}
                             </button>
-
-                            {/* <button
-                              onClick={() => handleDeleteTask(task)}
-                              title="Delete task"
-                              className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-md transition-colors cursor-pointer"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button> */}
                           </div>
                         </td>
                       </tr>
@@ -1330,6 +1518,102 @@ const MentorDashboard = () => {
                     <tr>
                       <td colSpan="8" className="px-6 py-8 text-center text-slate-400 dark:text-slate-500 text-xs">
                         No tasks found in the database.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+                {/* TAB: MENTEE BLOCKERS */}
+        {activeTab === "blockers" && (
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
+            <div className="p-6 border-b border-slate-200/80 dark:border-slate-700/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Mentee Blockers</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-300 mt-0.5">
+                  Help your mentees get unstuck. Only the mentee can mark a blocker as resolved.
+                </p>
+              </div>
+
+              <div className="flex bg-slate-100 dark:bg-slate-700 p-0.5 rounded-lg text-xs font-medium">
+                {[
+                  { value: "open", label: "Open" },
+                  { value: "resolved", label: "Resolved" },
+                  { value: "All", label: "All" },
+                ].map((f) => (
+                  <button
+                    key={f.value}
+                    onClick={() => setBlockerFilter(f.value)}
+                    className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${blockerFilter === f.value
+                        ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-2xs font-bold"
+                        : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {blockersError && (
+              <div className="m-6 mb-0 p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 rounded-lg text-xs font-medium">
+                {blockersError}
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/70 dark:bg-slate-900/60 border-b border-slate-200/80 dark:border-slate-700/80 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                    <th className="px-6 py-3.5">Task</th>
+                    <th className="px-6 py-3.5">Mentee</th>
+                    <th className="px-6 py-3.5">Status</th>
+                    <th className="px-6 py-3.5">Last Activity</th>
+                    <th className="px-6 py-3.5 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/80 text-xs">
+                  {filteredBlockers.map((b) => (
+                    <tr key={b.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors">
+                      <td className="px-6 py-4 font-bold text-slate-900 dark:text-white text-sm">
+                        {b.task?.title || `Task #${b.taskId}`}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="font-semibold text-slate-800 dark:text-slate-100">
+                          {b.mentee?.name || "Mentee"}
+                        </span>
+                        <span className="block text-[11px] text-slate-400">{b.mentee?.email || ""}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold inline-block border ${b.status === "open"
+                              ? "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200/60 dark:border-rose-500/30"
+                              : "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-500/30"
+                            }`}
+                        >
+                          {b.status === "open" ? "Open" : "Resolved"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-slate-600 dark:text-slate-300">
+                        {formatDueDateTime(b.updatedAt)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <button
+                          onClick={() => handleOpenConversation(b.id)}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          {b.status === "open" ? "Open Chat" : "View History"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {filteredBlockers.length === 0 && (
+                    <tr>
+                      <td colSpan="5" className="px-6 py-8 text-center text-slate-400 dark:text-slate-500 text-xs">
+                        {blockersLoading ? "Loading blockers..." : "No blockers to show."}
                       </td>
                     </tr>
                   )}
@@ -1854,8 +2138,26 @@ const MentorDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* MODAL: CONFIRM DELETE MENTEE (AND CASCADE TASKS) */}
+    
+
+            {/* MODAL: BLOCKER CONVERSATION (mentor can reply, cannot resolve) */}
+      {showConversationModal && (
+        <BlockerConversationModal
+          conversation={conversation}
+          loading={conversationLoading}
+          error={conversationError}
+          currentUserId={authUser?.id}
+          chatInput={chatInput}
+          onChatInputChange={setChatInput}
+          onSend={handleSendMessage}
+          sending={sendingMessage}
+          onClose={closeConversationModal}
+        />
+      )}
+
     </div>
   );
 };
-
 export default MentorDashboard;
