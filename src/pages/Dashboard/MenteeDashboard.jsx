@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect,  useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../../components/ThemeToggle";
 import NotificationBell from "../../components/NotificationBell";
@@ -15,6 +15,17 @@ import TaskTimer from "../../components/TaskTimer";
 import { formatDuration, formatHours } from "../../utils/formatDuration";
 
 import SubmissionStatus from "../../components/taskSubmission/SubmissionStatus";
+
+
+import BlockerConversationModal from "../../components/BlockerConversationModal";
+import {
+  raiseBlockerApi,
+  listBlockersApi,
+  getBlockerApi,
+  sendBlockerMessageApi,
+  resolveBlockerApi,
+} from "../../api/blockerApi";
+
 // Helper to get 2-letter initials
 function getInitials(name = "") {
   const normalized = typeof name === "string" ? name.trim() : "";
@@ -230,6 +241,37 @@ const MenteeDashboard = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [taskFilter, setTaskFilter] = useState("All");
 
+    // ---- Notification -> highlight task ----
+  const [highlightedTaskId, setHighlightedTaskId] = useState(null);
+  const [highlightKey, setHighlightKey] = useState(0); // lets the same task re-trigger
+  const highlightTimerRef = useRef(null);
+
+  const highlightTask = (taskId) => {
+    const id = Number(taskId);
+    if (!id) return;
+
+    setActiveTab("assignments");
+    setTaskFilter("All");
+    setHighlightedTaskId(id);
+    setHighlightKey((k) => k + 1);
+
+    clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(() => setHighlightedTaskId(null), 2500);
+  };
+
+  // Scroll after the tab has rendered
+  useEffect(() => {
+    if (!highlightedTaskId) return;
+    const t = setTimeout(() => {
+      document
+        .getElementById(`task-${highlightedTaskId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    return () => clearTimeout(t);
+  }, [highlightedTaskId, highlightKey]);
+
+  useEffect(() => () => clearTimeout(highlightTimerRef.current), []);
+
   // Dropdown & Modals
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [submittingTask, setSubmittingTask] = useState(null);
@@ -242,6 +284,72 @@ const MenteeDashboard = () => {
   const [blockerTask, setBlockerTask] = useState(null);
   const [blockerMessage, setBlockerMessage] = useState("");
   const [blockerLoading, setBlockerLoading] = useState(false);
+  const [conversation, setConversation] = useState(null);
+  const [showConversationModal, setShowConversationModal] = useState(false);
+
+    // ---- Blocker conversation state ----
+  const [menteeBlockers, setMenteeBlockers] = useState([]); // list of my blocker conversations
+  const [conversationLoading, setConversationLoading] = useState(false);
+  const [conversationError, setConversationError] = useState("");
+  const [chatInput, setChatInput] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const openConversationIdRef = useRef(null);
+
+  // Load my blocker conversations (used to show the "Blocker Chat" button per task)
+  const loadBlockers = useCallback(async () => {
+    try {
+      const res = await listBlockersApi();
+      setMenteeBlockers(Array.isArray(res?.data) ? res.data : []);
+    } catch (err) {
+      console.error("Failed to load blockers:", err);
+    }
+  }, []);
+
+  // Load one conversation with all its messages
+  const reloadConversation = useCallback(async (conversationId) => {
+    try {
+      const res = await getBlockerApi(conversationId);
+      setConversation(res.data);
+      setConversationError("");
+    } catch (err) {
+      setConversationError(
+        err.response?.data?.message || err.message || "Failed to load conversation"
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBlockers();
+  }, [loadBlockers]);
+
+  // Remember which conversation is open so socket events can refresh it
+  useEffect(() => {
+    openConversationIdRef.current = showConversationModal ? conversation?.id ?? null : null;
+  }, [conversation, showConversationModal]);
+
+  // Live updates: a mentor reply arrives as a BLOCKER_* notification
+  useEffect(() => {
+    const onBlockerNotification = (n) => {
+      if (!String(n?.type || "").startsWith("BLOCKER_")) return;
+      loadBlockers();
+      const openId = openConversationIdRef.current;
+      if (openId && Number(n?.data?.conversationId) === Number(openId)) {
+        reloadConversation(openId);
+      }
+    };
+    socket.on("notification:new", onBlockerNotification);
+    return () => socket.off("notification:new", onBlockerNotification);
+  }, [loadBlockers, reloadConversation]);
+
+  // Latest conversation per task (list is already newest-first)
+  const blockerByTask = useMemo(() => {
+    const map = {};
+    for (const b of menteeBlockers) {
+      if (!map[b.taskId]) map[b.taskId] = b;
+    }
+    return map;
+  }, [menteeBlockers]);
 
   // Submission Form State (matches backend PATCH /api/tasks/:id/submit)
   const [submissionForm, setSubmissionForm] = useState({
@@ -365,10 +473,19 @@ const MenteeDashboard = () => {
   };
 
 
-  const handleOpenTaskFromNotification = () => {
-    setActiveTab("assignments");
-    setTaskFilter("All");
-    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  //  const handleOpenTaskFromNotification = (taskId, notificationItem) => {
+  //   setActiveTab("assignments");
+  //   setTaskFilter("All");
+  //   mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+
+  //   const conversationId = notificationItem?.data?.conversationId;
+  //   if (String(notificationItem?.type || "").startsWith("BLOCKER_") && conversationId) {
+  //     handleOpenConversationById(conversationId);
+  //   }
+  // };
+
+    const handleOpenTaskFromNotification = (taskId, notificationItem) => {
+    highlightTask(taskId || notificationItem?.data?.taskId);
   };
 
   // Status update handler: Mentee can only set in-progress or hold.
@@ -382,6 +499,13 @@ const MenteeDashboard = () => {
       showToast("error", "Task is locked. You cannot change the status of a submitted or evaluated task.");
       return;
     } 
+
+        // A task that is already a blocker can only leave that state via "Mark as Resolved"
+    if (task.status === "blocker") {
+      showToast("error", "Use “Mark as Resolved” in the blocker chat to unblock this task.");
+      if (blockerByTask[task.id]) handleOpenConversation(task);
+      return;
+    }
 
     // Open blocker popup instead of directly updating status
     if (nextStatus === "blocker") {
@@ -496,37 +620,108 @@ const MenteeDashboard = () => {
     }));
   }
 };
-    const handleRaiseBlocker = async (e) => {
-    e.preventDefault();
+    
+  // Open a conversation by its id (used by buttons AND notifications)
+  const handleOpenConversationById = async (conversationId) => {
+    if (!conversationId) return;
+    setConversation(null);
+    setConversationError("");
+    setChatInput("");
+    setShowConversationModal(true);
+    setConversationLoading(true);
+    await reloadConversation(conversationId);
+    setConversationLoading(false);
+  };
 
+  // Open the latest conversation of a task
+  const handleOpenConversation = (task) => {
+    const existing = blockerByTask[task?.id];
+    if (!existing) {
+      showToast("error", "No blocker conversation found for this task.");
+      return;
+    }
+    handleOpenConversationById(existing.id);
+  };
+
+  const closeConversationModal = () => {
+    setShowConversationModal(false);
+    setConversation(null);
+    setChatInput("");
+    setConversationError("");
+  };
+
+  // Raise a blocker: creates conversation + first message + sets task to "blocker"
+  const handleRaiseBlocker = async (e) => {
+    e.preventDefault();
     if (!blockerTask || !blockerMessage.trim()) return;
 
     setBlockerLoading(true);
-
     try {
-      // Update the task status to blocker
-      const res = await updateTaskStatus(blockerTask.id, "blocker");
+      const res = await raiseBlockerApi(blockerTask.id, blockerMessage.trim());
+      if (res.success === false) throw new Error(res.message || "Failed to raise blocker");
 
-      if (res.success) {
-        showToast("success", "Task status updated to Blocker");
+      const newConversationId = res.data?.conversation?.id;
 
-          // Close the popup and clear the message
-        setBlockerTask(null);
-        setBlockerMessage("");
+      setBlockerTask(null);
+      setBlockerMessage("");
+      showToast("success", "Blocker raised. Your mentor has been notified.");
 
-        notifyTimerChanged();
-        } else {
-          showToast("error", res.error || "Failed to update task status");
-        }
-      } catch (error) {
-        console.error("Error raising blocker:", error);
-        showToast("error", "Something went wrong while raising the blocker");
-      } finally {
-        setBlockerLoading(false);
-      }
-    };
+      notifyTimerChanged(); // backend/other flows may close a running timer
+      await Promise.all([refetch(), loadBlockers()]);
 
+      if (newConversationId) handleOpenConversationById(newConversationId);
+    } catch (error) {
+      console.error("Error raising blocker:", error);
+      showToast(
+        "error",
+        error.response?.data?.message || error.message || "Could not raise the blocker"
+      );
+    } finally {
+      setBlockerLoading(false);
+    }
+  };
 
+  const handleSendMessage = async (e) => {
+    e?.preventDefault?.();
+    const text = chatInput.trim();
+    if (!conversation || !text || sendingMessage) return;
+
+    setSendingMessage(true);
+    try {
+      const res = await sendBlockerMessageApi(conversation.id, text);
+      if (res.success === false) throw new Error(res.message || "Failed to send message");
+      setChatInput("");
+      await reloadConversation(conversation.id);
+    } catch (error) {
+      setConversationError(
+        error.response?.data?.message || error.message || "Failed to send message"
+      );
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  const handleResolveBlocker = async () => {
+    if (!conversation || resolving) return;
+    if (!window.confirm("Mark this blocker as resolved? The task will go back to In Progress.")) {
+      return;
+    }
+
+    setResolving(true);
+    try {
+      const res = await resolveBlockerApi(conversation.id);
+      if (res.success === false) throw new Error(res.message || "Failed to resolve blocker");
+
+      showToast("success", "Blocker resolved. Task is back In Progress.");
+      await Promise.all([refetch(), loadBlockers(), reloadConversation(conversation.id)]);
+    } catch (error) {
+      setConversationError(
+        error.response?.data?.message || error.message || "Failed to resolve blocker"
+      );
+    } finally {
+      setResolving(false);
+    }
+  };
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#f8fafc] dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
@@ -1136,9 +1331,18 @@ const MenteeDashboard = () => {
             {/* Tasks Grid */}
            <div className="p-6 flex flex-col gap-5">
               {filteredTasks.map((task) => (
-                <div
+                // <div
+                //   key={task.id}
+                //   className="p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 hover:shadow-md transition-shadow flex flex-col justify-between"
+                // >
+                                <div
                   key={task.id}
-                  className="p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 hover:shadow-md transition-shadow flex flex-col justify-between"
+                  id={`task-${task.id}`}
+                  className={`p-5 rounded-xl border flex flex-col justify-between transition-all duration-500 ${
+                    highlightedTaskId === task.id
+                      ? "ring-1 ring-blue-700 border-blue-400  shadow-lg"
+                      : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 hover:shadow-md"
+                  }`}
                 >
                   {/* Submission History */}
                   <div className="mt-4 border-t border-slate-200 dark:border-slate-700 pt-3">
@@ -1290,6 +1494,23 @@ const MenteeDashboard = () => {
                       onStart={handleQuickStart}
                       onStop={handleQuickStop}
                     />
+                   {blockerByTask[task.id] && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenConversation(task)}
+                      className={`w-full py-1.5 rounded text-xs font-semibold border cursor-pointer ${
+                        blockerByTask[task.id].status === "open"
+                          ? "border-rose-300 dark:border-rose-500/40 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100"
+                          : "border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      {blockerByTask[task.id].status === "open"
+                        ? "Open Blocker Chat"
+                        : "View Blocker History"}
+                    </button>
+                  </div>
+                )}
 
                     {task.submission_url && (
                       <div className="mt-2 flex flex-wrap gap-3 text-xs">
@@ -1373,6 +1594,7 @@ const MenteeDashboard = () => {
                   </p>
                 </div>
               )}
+              
             </div>
           </div>
         )}
@@ -1608,17 +1830,20 @@ const MenteeDashboard = () => {
         </div>
       )}
 
-
           {/* MODAL: RAISE TASK BLOCKER */}
           {blockerTask && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+
               <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6">
 
+                {/* Header */}
                 <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700">
+
                   <div>
                     <h3 className="text-base font-bold text-slate-900 dark:text-white">
                       Raise a Blocker
                     </h3>
+
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                       Explain what you are stuck on.
                     </p>
@@ -1626,14 +1851,20 @@ const MenteeDashboard = () => {
 
                   <button
                     type="button"
-                    onClick={() => setBlockerTask(null)}
+                    onClick={() => {
+                      setBlockerTask(null);
+                      setBlockerMessage("");
+                    }}
                     className="text-xl text-slate-400 hover:text-slate-700 dark:hover:text-white"
                   >
                     &times;
                   </button>
+
                 </div>
 
+                {/* Task Details */}
                 <div className="mt-4">
+
                   <p className="text-sm font-semibold text-slate-800 dark:text-white">
                     {blockerTask.title}
                   </p>
@@ -1641,13 +1872,17 @@ const MenteeDashboard = () => {
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                     Your mentor {menteeUser.mentor} will receive your message.
                   </p>
+
                 </div>
 
+                {/* Blocker Form */}
                 <form
                   onSubmit={handleRaiseBlocker}
                   className="mt-4 space-y-4"
                 >
+
                   <div>
+
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
                       Describe your confusion
                     </label>
@@ -1665,13 +1900,20 @@ const MenteeDashboard = () => {
                     <p className="text-right text-[11px] text-slate-400 mt-1">
                       {blockerMessage.length}/2000
                     </p>
+
                   </div>
 
+                  {/* Action Buttons */}
                   <div className="flex justify-end gap-2">
+
                     <button
                       type="button"
-                      onClick={() => setBlockerTask(null)}
-                      className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold"
+                      onClick={() => {
+                        setBlockerTask(null);
+                        setBlockerMessage("");
+                      }}
+                      disabled={blockerLoading}
+                      className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 disabled:opacity-50"
                     >
                       Cancel
                     </button>
@@ -1688,6 +1930,22 @@ const MenteeDashboard = () => {
               </div>
             </div>
           )}
+        {/* MODAL: BLOCKER CONVERSATION */}
+      {showConversationModal && (
+        <BlockerConversationModal
+          conversation={conversation}
+          loading={conversationLoading}
+          error={conversationError}
+          currentUserId={menteeUser.id}
+          chatInput={chatInput}
+          onChatInputChange={setChatInput}
+          onSend={handleSendMessage}
+          sending={sendingMessage}
+          onResolve={handleResolveBlocker}
+          resolving={resolving}
+          onClose={closeConversationModal}
+        />
+      )}
     </div>
   );
 };
