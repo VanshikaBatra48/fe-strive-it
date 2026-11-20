@@ -1,48 +1,35 @@
-import axios from "axios";
-
-const API_URL = "http://localhost:3000/api";
-
-const getHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem("token")}`,
-});
+import apiClient from './axios';
 
 // Submit or resubmit a task
 export const submitTaskVersion = async (taskId, data) => {
-  const response = await axios.post(
-    `${API_URL}/tasks/${taskId}/submit`,
-    data,
-    { headers: getHeaders() }
-  );
-
+  const response = await apiClient.post(`/tasks/${taskId}/submit`, data);
   return response.data;
 };
 
 // Get all submission versions of a task
 export const getTaskSubmissionHistory = async (taskId) => {
-  const response = await axios.get(
-    `${API_URL}/tasks/${taskId}/submissions`,
-    { headers: getHeaders() }
-  );
-
+  const response = await apiClient.get(`/tasks/${taskId}/submissions`);
   return response.data;
 };
 
 // Mentor requests changes on a submission
-export const requestChangesApi = async (submissionId, { feedback, score }) => {
-  const response = await axios.patch(
-    `${API_URL}/submissions/${submissionId}/request-changes`,
-    { feedback, score },
-    { headers: getHeaders() }
+export const requestChangesApi = async (submissionId, { feedback, score } = {}) => {
+  const payload = { feedback };
+  if (score !== undefined && score !== null) payload.score = score;
+  const response = await apiClient.patch(
+    `/submissions/${submissionId}/request-changes`,
+    payload
   );
   return response.data;
 };
 
 // Mentor approves a submission
-export const approveSubmissionApi = async (submissionId, { feedback, score }) => {
-  const response = await axios.patch(
-    `${API_URL}/submissions/${submissionId}/approve`,
-    { feedback, score },
-    { headers: getHeaders() }
+export const approveSubmissionApi = async (submissionId, { feedback, score } = {}) => {
+  const payload = { feedback };
+  if (score !== undefined && score !== null) payload.score = score;
+  const response = await apiClient.patch(
+    `/submissions/${submissionId}/approve`,
+    payload
   );
   return response.data;
 };

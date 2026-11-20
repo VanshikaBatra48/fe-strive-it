@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import ThemeToggle from "../../components/ThemeToggle";
 import useAuth from "../../hooks/useAuth";
 import useUsers from "../../hooks/useUsers";
@@ -17,6 +17,7 @@ function getInitials(name = "") {
 
 function AdminDashboard() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const mainRef = useRef(null);
   const { user: currentUser, logout } = useAuth();
   const {
@@ -30,7 +31,28 @@ function AdminDashboard() {
     refetch,
   } = useUsers();
 
-  const [activeTab, setActiveTab] = useState("dashboard"); // "dashboard", "mentors", "mentees"
+  const tabFromUrl = searchParams.get("tab");
+  const [activeTab, setActiveTabState] = useState(() => {
+    return ["dashboard", "mentors", "mentees"].includes(tabFromUrl)
+      ? tabFromUrl
+      : "dashboard";
+  });
+
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    setSearchParams(tab === "dashboard" ? {} : { tab });
+    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && ["dashboard", "mentors", "mentees"].includes(tab)) {
+      setActiveTabState(tab);
+    } else if (!tab) {
+      setActiveTabState("dashboard");
+    }
+  }, [searchParams]);
+
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [modalError, setModalError] = useState("");
@@ -126,6 +148,27 @@ function AdminDashboard() {
     }
     return null;
   };
+
+  const activeMentorsCount = useMemo(
+    () => mentors.filter((m) => (m.status || "").toLowerCase() === "active").length,
+    [mentors]
+  );
+  const inactiveMentorsCount = mentors.length - activeMentorsCount;
+
+  const activeMenteesCount = useMemo(
+    () => mentees.filter((m) => (m.status || "").toLowerCase() === "active").length,
+    [mentees]
+  );
+  const inactiveMenteesCount = mentees.length - activeMenteesCount;
+
+  const menteesWithMentor = useMemo(
+    () => mentees.filter((m) => resolveMenteeMentor(m) !== null),
+    [mentees, mentors]
+  );
+  const menteesWithoutMentor = useMemo(
+    () => mentees.filter((m) => resolveMenteeMentor(m) === null),
+    [mentees, mentors]
+  );
 
   // Search & Status filters for mentors
   const filteredMentors = useMemo(() => {
@@ -416,14 +459,12 @@ function AdminDashboard() {
           {/* Navigation Links */}
           <nav className="px-3 space-y-1 overflow-y-auto no-scrollbar [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none] flex-1">
             <button
-              onClick={() => {
-                setActiveTab("dashboard");
-                mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "dashboard"
-                ? "bg-blue-600 text-white shadow-xs"
-                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                }`}
+              onClick={() => setActiveTab("dashboard")}
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === "dashboard"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+              }`}
             >
               <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -432,43 +473,41 @@ function AdminDashboard() {
             </button>
 
             <button
-              onClick={() => {
-                setActiveTab("mentors");
-                const el = document.getElementById("mentor-section");
-                if (el && mainRef.current) {
-                  const top = el.offsetTop - 20;
-                  mainRef.current.scrollTo({ top, behavior: "smooth" });
-                }
-              }}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "mentors"
-                ? "bg-blue-600 text-white shadow-xs"
-                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                }`}
+              onClick={() => setActiveTab("mentors")}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === "mentors"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+              }`}
             >
-              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              <span>Mentors</span>
+              <div className="flex items-center gap-3.5">
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                <span>Mentors</span>
+              </div>
+              <span className="bg-slate-800 text-slate-300 text-xs px-2 py-0.5 rounded-full font-semibold">
+                {mentors.length}
+              </span>
             </button>
 
             <button
-              onClick={() => {
-                setActiveTab("mentees");
-                const el = document.getElementById("mentee-section");
-                if (el && mainRef.current) {
-                  const top = el.offsetTop - 20;
-                  mainRef.current.scrollTo({ top, behavior: "smooth" });
-                }
-              }}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "mentees"
-                ? "bg-blue-600 text-white shadow-xs"
-                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                }`}
+              onClick={() => setActiveTab("mentees")}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === "mentees"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+              }`}
             >
-              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              <span>Mentees</span>
+              <div className="flex items-center gap-3.5">
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                <span>Mentees</span>
+              </div>
+              <span className="bg-slate-800 text-slate-300 text-xs px-2 py-0.5 rounded-full font-semibold">
+                {mentees.length}
+              </span>
             </button>
 
             <button
@@ -504,7 +543,16 @@ function AdminDashboard() {
       <main ref={mainRef} className="flex-1 h-screen overflow-y-auto no-scrollbar [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none] px-8 py-6">
 
         {/* Top Navbar */}
-        <div className="flex items-center justify-end gap-3 mb-4 relative">
+        <div className="flex items-center justify-between gap-3 mb-6 relative">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Workspace</span>
+            <span className="text-xs text-slate-300 dark:text-slate-600">/</span>
+            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+              {activeTab === "mentors" ? "Mentors Management" : activeTab === "mentees" ? "Mentees Management" : "Admin Portal"}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => navigate("/chat")}
@@ -563,6 +611,7 @@ function AdminDashboard() {
               </div>
             )}
           </div>
+          </div>
         </div>
 
         {/* Notification Toast */}
@@ -616,54 +665,409 @@ function AdminDashboard() {
           </div>
         )}
 
-        {/* Page Title & Subtitle */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Admin Dashboard
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Manage mentors and mentees in the Training Management System.
-          </p>
-        </div>
-
-        {/* Top Stat Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Total Mentors Card */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-100 dark:border-slate-700/80 shadow-xs flex items-center gap-5">
-            <div className="w-14 h-14 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
-              <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-              </svg>
+        {/* ========================================================
+            TAB 1: DASHBOARD OVERVIEW PAGE
+            ======================================================== */}
+        {activeTab === "dashboard" && (
+          <div>
+            {/* Page Title & Subtitle */}
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+                Admin Dashboard
+              </h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Overview and system statistics for mentors and mentees in the Training Management System.
+              </p>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">Total Mentors</p>
-              <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white mt-0.5">
-                {mentors.length}
-              </h2>
+
+            {/* Top Interactive Stat Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+              {/* Total Mentors Card */}
+              <div
+                onClick={() => setActiveTab("mentors")}
+                className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs hover:border-blue-500 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-12 h-12 rounded-xl bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                    </svg>
+                  </div>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300">
+                    {activeMentorsCount} Active
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Mentors</p>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white">
+                      {mentors.length}
+                    </h2>
+                    <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                      View All &rarr;
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Total Mentees Card */}
+              <div
+                onClick={() => setActiveTab("mentees")}
+                className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-600/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+                    </svg>
+                  </div>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-300">
+                    {activeMenteesCount} Active
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Mentees</p>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white">
+                      {mentees.length}
+                    </h2>
+                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                      View All &rarr;
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mentorship Coverage Card */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-12 h-12 rounded-xl bg-indigo-600/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                  </div>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300">
+                    {mentees.length > 0 ? Math.round((menteesWithMentor.length / mentees.length) * 100) : 0}% Paired
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Mentorship Coverage</p>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white">
+                      {menteesWithMentor.length}
+                    </h2>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      of {mentees.length} assigned
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Unassigned Mentees Card */}
+              <div
+                onClick={() => {
+                  setMenteeFilter("All");
+                  setActiveTab("mentees");
+                }}
+                className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs hover:border-amber-500 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-12 h-12 rounded-xl bg-amber-600/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                    menteesWithoutMentor.length > 0
+                      ? "bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300"
+                      : "bg-emerald-50 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-300"
+                  }`}>
+                    {menteesWithoutMentor.length > 0 ? "Action Required" : "All Paired"}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Unassigned Mentees</p>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white">
+                      {menteesWithoutMentor.length}
+                    </h2>
+                    <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                      Assign &rarr;
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Action Navigation Panels */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              {/* Mentors Management Panel */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">Mentors Hub</h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {mentors.length} total mentors • {availableMentors.length} active
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => openCreate("mentor")}
+                      className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <span>+</span>
+                      <span>New Mentor</span>
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
+                    Manage instructors, view assigned mentees per mentor, register new mentors, and configure mentor accounts.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab("mentors")}
+                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                >
+                  <span>Open Mentors Page</span>
+                  <span>&rarr;</span>
+                </button>
+              </div>
+
+              {/* Mentees Management Panel */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">Mentees Hub</h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {mentees.length} total mentees • {menteesWithMentor.length} assigned
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => openCreate("mentee")}
+                      className="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <span>+</span>
+                      <span>New Mentee</span>
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
+                    Track intern onboarding progress, review mentor allocations, pair unassigned interns, and oversee mentee profiles.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab("mentees")}
+                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                >
+                  <span>Open Mentees Page</span>
+                  <span>&rarr;</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Previews Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              {/* Recent Mentors Preview */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200/80 dark:border-slate-700/80 overflow-hidden">
+                <div className="p-4 px-6 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">Recent Mentors</h4>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab("mentors")}
+                    className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                  >
+                    View All ({mentors.length}) &rarr;
+                  </button>
+                </div>
+                <div className="divide-y divide-slate-100 dark:divide-slate-700/80">
+                  {mentors.slice(0, 5).map((mentor) => {
+                    const assignedMentees = mentees.filter((m) =>
+                      m.mentorId
+                        ? m.mentorId === mentor.id
+                        : m.mentor?.toLowerCase() === mentor.name.toLowerCase()
+                    );
+                    return (
+                      <div key={mentor.id} className="p-4 px-6 flex items-center justify-between hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${mentor.avatarBg}`}>
+                            {getInitials(mentor.name)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{mentor.name}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{mentor.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                            {assignedMentees.length} mentee{assignedMentees.length !== 1 ? "s" : ""}
+                          </span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            mentor.status?.toLowerCase() === "inactive"
+                              ? "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
+                              : "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
+                          }`}>
+                            {mentor.status}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {mentors.length === 0 && (
+                    <p className="p-6 text-center text-xs text-slate-400">No mentors registered yet.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Recent Mentees Preview */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200/80 dark:border-slate-700/80 overflow-hidden">
+                <div className="p-4 px-6 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">Recent Mentees</h4>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab("mentees")}
+                    className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                  >
+                    View All ({mentees.length}) &rarr;
+                  </button>
+                </div>
+                <div className="divide-y divide-slate-100 dark:divide-slate-700/80">
+                  {mentees.slice(0, 5).map((mentee) => {
+                    const assignedMentor = resolveMenteeMentor(mentee);
+                    return (
+                      <div key={mentee.id} className="p-4 px-6 flex items-center justify-between hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${mentee.avatarBg}`}>
+                            {getInitials(mentee.name)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{mentee.name}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                              {assignedMentor ? `Mentor: ${assignedMentor.name}` : "Unassigned"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            mentee.status?.toLowerCase() === "inactive"
+                              ? "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
+                              : "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
+                          }`}>
+                            {mentee.status}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {mentees.length === 0 && (
+                    <p className="p-6 text-center text-xs text-slate-400">No mentees registered yet.</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Total Mentees Card */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-100 dark:border-slate-700/80 shadow-xs flex items-center gap-5">
-            <div className="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
-              <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
-              </svg>
+        {/* ========================================================
+            TAB 2: MENTORS SEPARATE PAGE
+            ======================================================== */}
+        {activeTab === "mentors" && (
+          <div>
+            {/* Page Title & Actions */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+                  Mentors Management
+                </h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  View, manage, and assign mentees to all technical mentors in the system.
+                </p>
+              </div>
+              <button
+                onClick={() => openCreate("mentor")}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
+              >
+                <span className="text-lg leading-none">+</span>
+                <span>Create Mentor</span>
+              </button>
             </div>
-            <div>
-              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Total Mentees</p>
-              <h2 className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                {mentees.length}
-              </h2>
-            </div>
-          </div>
-        </div>
 
-        {/* Mentor List Section */}
-        <section
-          id="mentor-section"
-          className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200/80 dark:border-slate-700/80 mb-8 overflow-hidden"
-        >
+            {/* Mentors Stats Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {/* Total Mentors */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+                <div className="w-11 h-11 rounded-lg bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Mentors</p>
+                  <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">{mentors.length}</h3>
+                </div>
+              </div>
+
+              {/* Active Mentors */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+                <div className="w-11 h-11 rounded-lg bg-emerald-600/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Mentors</p>
+                  <h3 className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">{availableMentors.length}</h3>
+                </div>
+              </div>
+
+              {/* Inactive Mentors */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+                <div className="w-11 h-11 rounded-lg bg-rose-600/10 dark:bg-rose-500/20 text-rose-600 dark:text-rose-300 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Inactive Mentors</p>
+                  <h3 className="text-2xl font-extrabold text-rose-600 dark:text-rose-400 mt-0.5">{inactiveMentorsCount}</h3>
+                </div>
+              </div>
+
+              {/* Mentees Mentored */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+                <div className="w-11 h-11 rounded-lg bg-indigo-600/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Mentees Mentored</p>
+                  <h3 className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-0.5">{menteesWithMentor.length}</h3>
+                </div>
+              </div>
+            </div>
+
+            {/* Mentor List Section */}
+            <section
+              id="mentor-section"
+              className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200/80 dark:border-slate-700/80 mb-8 overflow-hidden"
+            >
           {/* Card Header */}
           <div className="p-6 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -884,6 +1288,87 @@ function AdminDashboard() {
             </table>
           </div>
         </section>
+      </div>
+    )}
+
+    {/* ========================================================
+        TAB 3: MENTEES SEPARATE PAGE
+        ======================================================== */}
+    {activeTab === "mentees" && (
+      <div>
+        {/* Page Title & Actions */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+              Mentees Management
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              View, track, and assign mentors to all mentees in the training program.
+            </p>
+          </div>
+          <button
+            onClick={() => openCreate("mentee")}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
+          >
+            <span className="text-lg leading-none">+</span>
+            <span>Create Mentee</span>
+          </button>
+        </div>
+
+        {/* Mentees Stats Bar */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {/* Total Mentees */}
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+            <div className="w-11 h-11 rounded-lg bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Mentees</p>
+              <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">{mentees.length}</h3>
+            </div>
+          </div>
+
+          {/* Active Mentees */}
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+            <div className="w-11 h-11 rounded-lg bg-emerald-600/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Mentees</p>
+              <h3 className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">{activeMenteesCount}</h3>
+            </div>
+          </div>
+
+          {/* Assigned to Mentor */}
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+            <div className="w-11 h-11 rounded-lg bg-indigo-600/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Assigned to Mentor</p>
+              <h3 className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-0.5">{menteesWithMentor.length}</h3>
+            </div>
+          </div>
+
+          {/* Needs Mentor */}
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+            <div className="w-11 h-11 rounded-lg bg-amber-600/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Needs Mentor</p>
+              <h3 className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-0.5">{menteesWithoutMentor.length}</h3>
+            </div>
+          </div>
+        </div>
 
         {/* Mentee List Section */}
         <section
@@ -1109,7 +1594,9 @@ function AdminDashboard() {
             </table>
           </div>
         </section>
-      </main>
+      </div>
+    )}
+  </main>
 
       {/* CREATE MODAL */}
       {showCreateModal && (
