@@ -6,6 +6,7 @@ import useChatSocket from '../hooks/useChatSocket';
 import ChatWindow from '../components/chat/chatWindow';
 import MembersPanel from '../components/chat/membersPanel';
 import CreateGroupModal from '../components/chat/createGroupModal';
+import ConfirmModal from '../components/common/ConfirmModal';
 import ThemeToggle from '../components/ThemeToggle';
 import { socket } from '../lib/socket';
 import '../components/chat/chat.css';
@@ -237,12 +238,24 @@ export default function ChatPage() {
     });
   };
 
-  const remove = async (messageId) => {
-    if (!activeId || !window.confirm('Delete this message for everyone?')) return;
+  const [messageToDelete, setMessageToDelete] = useState(null);
+  const [deleteMsgLoading, setDeleteMsgLoading] = useState(false);
+
+  const remove = (messageId) => {
+    if (!activeId) return;
+    setMessageToDelete(messageId);
+  };
+
+  const confirmDeleteMessage = async () => {
+    if (!activeId || !messageToDelete) return;
+    setDeleteMsgLoading(true);
     try {
-      await chatApi.deleteMessage(activeId, messageId);
+      await chatApi.deleteMessage(activeId, messageToDelete);
+      setMessageToDelete(null);
     } catch (e) {
-      window.alert(e?.response?.data?.message ?? 'Could not delete message');
+      console.error(e);
+    } finally {
+      setDeleteMsgLoading(false);
     }
   };
 
@@ -508,6 +521,18 @@ export default function ChatPage() {
           }}
         />
       )}
+
+      {/* Delete Message Confirm Modal */}
+      <ConfirmModal
+        isOpen={!!messageToDelete}
+        variant="danger"
+        title="Delete Message"
+        message="Are you sure you want to delete this message for everyone in this group? This action cannot be undone."
+        confirmText="Delete Message"
+        loading={deleteMsgLoading}
+        onConfirm={confirmDeleteMessage}
+        onClose={() => setMessageToDelete(null)}
+      />
     </div>
   );
 }

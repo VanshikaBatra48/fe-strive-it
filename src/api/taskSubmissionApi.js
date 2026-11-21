@@ -2,7 +2,12 @@ import apiClient from './axios';
 
 // Submit or resubmit a task
 export const submitTaskVersion = async (taskId, data) => {
-  const response = await apiClient.post(`/tasks/${taskId}/submit`, data);
+  const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+  const response = await apiClient.post(
+    `/tasks/${taskId}/submit`,
+    data,
+    isFormData ? { headers: { 'Content-Type': undefined } } : {}
+  );
   return response.data;
 };
 

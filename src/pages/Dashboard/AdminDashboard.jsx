@@ -1,8 +1,10 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import ThemeToggle from "../../components/ThemeToggle";
 import useAuth from "../../hooks/useAuth";
 import useUsers from "../../hooks/useUsers";
+import taskApi from "../../api/taskApi";
+import ConfirmModal from "../../components/common/ConfirmModal";
 
 // Helper to get 2-letter initials
 function getInitials(name = "") {
@@ -33,7 +35,7 @@ function AdminDashboard() {
 
   const tabFromUrl = searchParams.get("tab");
   const [activeTab, setActiveTabState] = useState(() => {
-    return ["dashboard", "mentors", "mentees"].includes(tabFromUrl)
+    return ["dashboard", "mentors", "mentees", "tasks"].includes(tabFromUrl)
       ? tabFromUrl
       : "dashboard";
   });
@@ -46,7 +48,7 @@ function AdminDashboard() {
 
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (tab && ["dashboard", "mentors", "mentees"].includes(tab)) {
+    if (tab && ["dashboard", "mentors", "mentees", "tasks"].includes(tab)) {
       setActiveTabState(tab);
     } else if (!tab) {
       setActiveTabState("dashboard");
@@ -57,6 +59,34 @@ function AdminDashboard() {
   const [actionLoading, setActionLoading] = useState(false);
   const [modalError, setModalError] = useState("");
   const [notification, setNotification] = useState(null);
+
+  // All Tasks State
+  const [allTasks, setAllTasks] = useState([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [taskSearch, setTaskSearch] = useState("");
+  const [taskStatusFilter, setTaskStatusFilter] = useState("All");
+  const [taskPriorityFilter, setTaskPriorityFilter] = useState("All");
+  const [taskCategoryFilter, setTaskCategoryFilter] = useState("All");
+  const [selectedTaskDetails, setSelectedTaskDetails] = useState(null);
+  const [taskToDelete, setTaskToDelete] = useState(null);
+  const [deleteTaskLoading, setDeleteTaskLoading] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+
+  const loadAllTasks = useCallback(async () => {
+    try {
+      setTasksLoading(true);
+      const data = await taskApi.getTasks({});
+      setAllTasks(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load tasks:", err);
+    } finally {
+      setTasksLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAllTasks();
+  }, [loadAllTasks]);
 
 
 
@@ -193,6 +223,45 @@ function AdminDashboard() {
       return matchesSearch && matchesFilter;
     });
   }, [mentees, menteeSearch, menteeFilter]);
+
+  // Search & Category & Priority & Status filters for tasks
+  const filteredTasks = useMemo(() => {
+    return allTasks.filter((t) => {
+      const q = taskSearch.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        (t.title || "").toLowerCase().includes(q) ||
+        (t.description || "").toLowerCase().includes(q) ||
+        (t.mentee?.name || "").toLowerCase().includes(q) ||
+        (t.mentee?.email || "").toLowerCase().includes(q) ||
+        (t.assigner?.name || "").toLowerCase().includes(q) ||
+        (t.category || "").toLowerCase().includes(q);
+
+      const matchesStatus =
+        taskStatusFilter === "All" ||
+        (t.status || "").toLowerCase() === taskStatusFilter.toLowerCase();
+
+      const matchesPriority =
+        taskPriorityFilter === "All" ||
+        (t.priority || "").toLowerCase() === taskPriorityFilter.toLowerCase();
+
+      const matchesCategory =
+        taskCategoryFilter === "All" ||
+        (t.category || "").toLowerCase() === taskCategoryFilter.toLowerCase();
+
+      return matchesSearch && matchesStatus && matchesPriority && matchesCategory;
+    });
+  }, [allTasks, taskSearch, taskStatusFilter, taskPriorityFilter, taskCategoryFilter]);
+
+  const taskStats = useMemo(() => {
+    const total = allTasks.length;
+    const inProgress = allTasks.filter((t) => t.status === "in-progress").length;
+    const submitted = allTasks.filter((t) => t.status === "submitted").length;
+    const needsRevision = allTasks.filter((t) => t.status === "needs-revision").length;
+    const complete = allTasks.filter((t) => t.status === "complete").length;
+    const blocker = allTasks.filter((t) => t.status === "blocker" || t.status === "hold").length;
+    return { total, inProgress, submitted, needsRevision, complete, blocker };
+  }, [allTasks]);
 
   // Filtered and sorted mentees inside the assign-mentees dropdown (first unassigned, then assigned)
   const availableMenteesForAssign = useMemo(() => {
@@ -408,34 +477,155 @@ function AdminDashboard() {
     }
   }
 
-  async function handleDelete(id, name) {
+  function handleDelete(id, name) {
     const target = users.find((u) => u.id === Number(id));
-    const warning =
-      target?.role === "mentee"
-        ? `Are you sure you want to delete ${name}? All tasks assigned to this mentee will also be permanently deleted.`
-        : `Are you sure you want to delete ${name}?`;
+    setUserToDelete({
+      id,
+      name,
+      isMentee: target?.role === "mentee",
+    });
+  }
 
-    if (window.confirm(warning)) {
-      setActionLoading(true);
-      const res = await deleteUser(id);
-      setActionLoading(false);
-      if (res.success) {
-        const extra =
-          res.deletedTasksCount > 0
-            ? ` (${res.deletedTasksCount} task${res.deletedTasksCount > 1 ? "s" : ""} removed)`
-            : "";
-        setNotification({
-          type: "success",
-          message: `${name} deleted successfully!${extra}`,
-        });
-        setTimeout(() => setNotification(null), 3500);
-      } else {
-        setNotification({
-          type: "error",
-          message: res.error || "Failed to delete user",
-        });
-        setTimeout(() => setNotification(null), 5000);
+  async function confirmDeleteUser() {
+    if (!userToDelete) return;
+    setActionLoading(true);
+    const res = await deleteUser(userToDelete.id);
+    setActionLoading(false);
+    const deletedName = userToDelete.name;
+    setUserToDelete(null);
+
+    if (res.success) {
+      const extra =
+        res.deletedTasksCount > 0
+          ? ` (${res.deletedTasksCount} task${res.deletedTasksCount > 1 ? "s" : ""} removed)`
+          : "";
+      setNotification({
+        type: "success",
+        message: `${deletedName} deleted successfully!${extra}`,
+      });
+      loadAllTasks();
+      setTimeout(() => setNotification(null), 3500);
+    } else {
+      setNotification({
+        type: "error",
+        message: res.error || "Failed to delete user",
+      });
+      setTimeout(() => setNotification(null), 5000);
+    }
+  }
+
+  async function confirmDeleteTask() {
+    if (!taskToDelete) return;
+    setDeleteTaskLoading(true);
+    try {
+      await taskApi.deleteTask(taskToDelete.id);
+      setNotification({
+        type: "success",
+        message: `Task "${taskToDelete.title}" deleted successfully!`,
+      });
+      setAllTasks((prev) => prev.filter((t) => t.id !== taskToDelete.id));
+      if (selectedTaskDetails?.id === taskToDelete.id) {
+        setSelectedTaskDetails(null);
       }
+      setTaskToDelete(null);
+      setTimeout(() => setNotification(null), 3500);
+    } catch (err) {
+      setNotification({
+        type: "error",
+        message: err.response?.data?.message || err.message || "Failed to delete task",
+      });
+      setTimeout(() => setNotification(null), 5000);
+    } finally {
+      setDeleteTaskLoading(false);
+    }
+  }
+
+  // Helpers for formatting tasks
+  function formatDate(dateVal) {
+    if (!dateVal) return "—";
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return "—";
+      return d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    } catch {
+      return "—";
+    }
+  }
+
+  function formatDateTime(dateVal) {
+    if (!dateVal) return "—";
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return "—";
+      return d.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    } catch {
+      return "—";
+    }
+  }
+
+  function getStatusBadge(status) {
+    const s = (status || "").toLowerCase();
+    switch (s) {
+      case "complete":
+        return {
+          bg: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60",
+          dot: "bg-emerald-500",
+          label: "Completed",
+        };
+      case "submitted":
+        return {
+          bg: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60",
+          dot: "bg-amber-500 animate-pulse",
+          label: "Submitted",
+        };
+      case "needs-revision":
+        return {
+          bg: "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/60",
+          dot: "bg-purple-500",
+          label: "Needs Revision",
+        };
+      case "blocker":
+        return {
+          bg: "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/60",
+          dot: "bg-rose-500 animate-ping",
+          label: "Blocker",
+        };
+      case "hold":
+        return {
+          bg: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700",
+          dot: "bg-slate-400",
+          label: "On Hold",
+        };
+      case "in-progress":
+      default:
+        return {
+          bg: "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/60",
+          dot: "bg-blue-500 animate-pulse",
+          label: "In Progress",
+        };
+    }
+  }
+
+  function getPriorityBadge(priority) {
+    const p = (priority || "").toLowerCase();
+    switch (p) {
+      case "high":
+        return "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20";
+      case "low":
+        return "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20";
+      case "medium":
+      default:
+        return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20";
     }
   }
 
@@ -511,6 +701,25 @@ function AdminDashboard() {
             </button>
 
             <button
+              onClick={() => setActiveTab("tasks")}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === "tasks"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+              }`}
+            >
+              <div className="flex items-center gap-3.5">
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+                <span>Tasks</span>
+              </div>
+              <span className="bg-slate-800 text-slate-300 text-xs px-2 py-0.5 rounded-full font-semibold">
+                {allTasks.length}
+              </span>
+            </button>
+
+            <button
               type="button"
               onClick={() => navigate("/chat")}
               className="w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60"
@@ -548,7 +757,13 @@ function AdminDashboard() {
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Workspace</span>
             <span className="text-xs text-slate-300 dark:text-slate-600">/</span>
             <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-              {activeTab === "mentors" ? "Mentors Management" : activeTab === "mentees" ? "Mentees Management" : "Admin Portal"}
+              {activeTab === "mentors"
+                ? "Mentors Management"
+                : activeTab === "mentees"
+                ? "Mentees Management"
+                : activeTab === "tasks"
+                ? "All Tasks & Assignments"
+                : "Admin Portal"}
             </span>
           </div>
 
@@ -681,7 +896,7 @@ function AdminDashboard() {
             </div>
 
             {/* Top Interactive Stat Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
               {/* Total Mentors Card */}
               <div
                 onClick={() => setActiveTab("mentors")}
@@ -797,10 +1012,38 @@ function AdminDashboard() {
                   </div>
                 </div>
               </div>
+
+              {/* Total Tasks Card */}
+              <div
+                onClick={() => setActiveTab("tasks")}
+                className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs hover:border-violet-500 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-12 h-12 rounded-xl bg-violet-600/10 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                    </svg>
+                  </div>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-50 dark:bg-violet-900/40 text-violet-600 dark:text-violet-300">
+                    {taskStats.inProgress} In Progress
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Tasks</p>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white">
+                      {allTasks.length}
+                    </h2>
+                    <span className="text-xs font-semibold text-violet-600 dark:text-violet-400 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                      View Tasks &rarr;
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Quick Action Navigation Panels */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               {/* Mentors Management Panel */}
               <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
                 <div>
@@ -873,6 +1116,40 @@ function AdminDashboard() {
                   className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
                 >
                   <span>Open Mentees Page</span>
+                  <span>&rarr;</span>
+                </button>
+              </div>
+
+              {/* Tasks Directory Panel */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-violet-600 text-white flex items-center justify-center shadow-xs">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">Tasks Directory</h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {allTasks.length} total tasks • {taskStats.complete} completed
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 bg-violet-50 dark:bg-violet-900/40 text-violet-600 dark:text-violet-300 rounded-lg text-xs font-semibold">
+                      {taskStats.submitted} pending review
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
+                    Inspect all assignments, files attached by mentors, mentee submission deliverables, logged working hours, and evaluations.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab("tasks")}
+                  className="w-full py-2.5 px-4 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                >
+                  <span>Open Tasks Directory</span>
                   <span>&rarr;</span>
                 </button>
               </div>
@@ -1596,6 +1873,430 @@ function AdminDashboard() {
         </section>
       </div>
     )}
+
+    {/* ========================================================
+        TAB 4: ALL TASKS & DETAILS DIRECTORY PAGE
+        ======================================================== */}
+    {activeTab === "tasks" && (
+      <div>
+        {/* Page Title & Controls */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+              All Tasks Directory
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Oversee all assignments, mentor files, mentee deliverables, time logs, and reviews.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={loadAllTasks}
+              disabled={tasksLoading}
+              className="px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <svg className={`w-4 h-4 text-blue-600 dark:text-blue-400 ${tasksLoading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>Refresh Tasks</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Filter Metrics Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+          <div
+            onClick={() => setTaskStatusFilter("All")}
+            className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+              taskStatusFilter === "All"
+                ? "bg-blue-50/80 dark:bg-blue-900/30 border-blue-500/50 shadow-xs"
+                : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
+            }`}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">All Tasks</p>
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mt-1">{taskStats.total}</h3>
+          </div>
+
+          <div
+            onClick={() => setTaskStatusFilter(taskStatusFilter === "in-progress" ? "All" : "in-progress")}
+            className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+              taskStatusFilter === "in-progress"
+                ? "bg-blue-50/80 dark:bg-blue-900/30 border-blue-500/50 shadow-xs"
+                : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">In Progress</p>
+            </div>
+            <h3 className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">{taskStats.inProgress}</h3>
+          </div>
+
+          <div
+            onClick={() => setTaskStatusFilter(taskStatusFilter === "submitted" ? "All" : "submitted")}
+            className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+              taskStatusFilter === "submitted"
+                ? "bg-amber-50/80 dark:bg-amber-900/30 border-amber-500/50 shadow-xs"
+                : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Submitted</p>
+            </div>
+            <h3 className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">{taskStats.submitted}</h3>
+          </div>
+
+          <div
+            onClick={() => setTaskStatusFilter(taskStatusFilter === "needs-revision" ? "All" : "needs-revision")}
+            className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+              taskStatusFilter === "needs-revision"
+                ? "bg-purple-50/80 dark:bg-purple-900/30 border-purple-500/50 shadow-xs"
+                : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-purple-500" />
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Revision</p>
+            </div>
+            <h3 className="text-xl font-bold text-purple-600 dark:text-purple-400 mt-1">{taskStats.needsRevision}</h3>
+          </div>
+
+          <div
+            onClick={() => setTaskStatusFilter(taskStatusFilter === "complete" ? "All" : "complete")}
+            className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+              taskStatusFilter === "complete"
+                ? "bg-emerald-50/80 dark:bg-emerald-900/30 border-emerald-500/50 shadow-xs"
+                : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Completed</p>
+            </div>
+            <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{taskStats.complete}</h3>
+          </div>
+
+          <div
+            onClick={() => setTaskStatusFilter(taskStatusFilter === "blocker" ? "All" : "blocker")}
+            className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+              taskStatusFilter === "blocker"
+                ? "bg-rose-50/80 dark:bg-rose-900/30 border-rose-500/50 shadow-xs"
+                : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Blockers</p>
+            </div>
+            <h3 className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-1">{taskStats.blocker}</h3>
+          </div>
+        </div>
+
+        {/* Filter Toolbar */}
+        <section className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-xs border border-slate-200/80 dark:border-slate-700/80 mb-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            {/* Search Input */}
+            <div className="relative flex-1 min-w-[240px]">
+              <svg className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search tasks by title, mentee, mentor, or category..."
+                value={taskSearch}
+                onChange={(e) => setTaskSearch(e.target.value)}
+                className="w-full pl-10 pr-9 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-slate-50/50 dark:bg-slate-900/50 text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+              {taskSearch && (
+                <button
+                  onClick={() => setTaskSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer"
+                >
+                  &times;
+                </button>
+              )}
+            </div>
+
+            {/* Dropdown Filters */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                <span>Status:</span>
+                <select
+                  value={taskStatusFilter}
+                  onChange={(e) => setTaskStatusFilter(e.target.value)}
+                  className="px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="in-progress">In Progress</option>
+                  <option value="submitted">Submitted</option>
+                  <option value="needs-revision">Needs Revision</option>
+                  <option value="complete">Completed</option>
+                  <option value="blocker">Blocker</option>
+                  <option value="hold">On Hold</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                <span>Priority:</span>
+                <select
+                  value={taskPriorityFilter}
+                  onChange={(e) => setTaskPriorityFilter(e.target.value)}
+                  className="px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="All">All Priorities</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                <span>Category:</span>
+                <select
+                  value={taskCategoryFilter}
+                  onChange={(e) => setTaskCategoryFilter(e.target.value)}
+                  className="px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="All">All Categories</option>
+                  <option value="upskill">Upskill</option>
+                  <option value="research">Research</option>
+                  <option value="client-project">Client Project</option>
+                  <option value="inhouse-project">Inhouse Project</option>
+                </select>
+              </div>
+
+              {(taskSearch || taskStatusFilter !== "All" || taskPriorityFilter !== "All" || taskCategoryFilter !== "All") && (
+                <button
+                  onClick={() => {
+                    setTaskSearch("");
+                    setTaskStatusFilter("All");
+                    setTaskPriorityFilter("All");
+                    setTaskCategoryFilter("All");
+                  }}
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer ml-1 font-medium"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Tasks Table */}
+        <section className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200/80 dark:border-slate-700/80 overflow-hidden mb-8">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[900px]">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Task Title & Category
+                  </th>
+                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Mentee
+                  </th>
+                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Assigned By
+                  </th>
+                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Due Date
+                  </th>
+                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Logged Time
+                  </th>
+                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Files / Links
+                  </th>
+                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
+                {filteredTasks.map((task) => {
+                  const statusInfo = getStatusBadge(task.status);
+                  const isOverdue =
+                    task.status !== "complete" &&
+                    task.due_date &&
+                    new Date(task.due_date) < new Date();
+                  const attachmentCount = Array.isArray(task.attachments) ? task.attachments.length : 0;
+                  const hasSubmissionDeliverable = Boolean(task.submission_url || task.demo_url || task.submission_notes);
+                  const actualHours = (Number(task.actual_seconds || 0) / 3600).toFixed(1);
+
+                  return (
+                    <tr
+                      key={task.id}
+                      className="hover:bg-slate-50/70 dark:hover:bg-slate-700/30 transition-colors"
+                    >
+                      {/* Title & Category & Priority */}
+                      <td className="py-3 px-5">
+                        <div className="flex items-start gap-2">
+                          <div>
+                            <span className="font-semibold text-sm text-slate-900 dark:text-white block hover:text-blue-600 cursor-pointer" onClick={() => setSelectedTaskDetails(task)}>
+                              {task.title}
+                            </span>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-[10px] font-medium uppercase px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                {task.category || "upskill"}
+                              </span>
+                              <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded border ${getPriorityBadge(task.priority)}`}>
+                                {task.priority || "medium"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Mentee */}
+                      <td className="py-3 px-5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs flex-shrink-0">
+                            {getInitials(task.mentee?.name || "Mentee")}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                              {task.mentee?.name || `Mentee #${task.mentee_id}`}
+                            </p>
+                            <p className="text-[11px] text-slate-400 truncate">
+                              {task.mentee?.email || "—"}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Assigner / Mentor */}
+                      <td className="py-3 px-5 text-xs text-slate-700 dark:text-slate-300">
+                        {task.assigner?.name || `Mentor #${task.assigned_by}`}
+                      </td>
+
+                      {/* Status */}
+                      <td className="py-3 px-5">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${statusInfo.bg}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`} />
+                          <span>{statusInfo.label}</span>
+                        </span>
+                      </td>
+
+                      {/* Due Date */}
+                      <td className="py-3 px-5 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                        <div>
+                          <span>{formatDate(task.due_date)}</span>
+                          {isOverdue && (
+                            <span className="block text-[10px] font-bold text-rose-500 dark:text-rose-400 mt-0.5">
+                              Overdue
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Time Logged */}
+                      <td className="py-3 px-5 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                        <div className="font-semibold text-slate-800 dark:text-slate-200">
+                          {actualHours}h {task.estimated_hours ? `/ ${task.estimated_hours}h` : ""}
+                        </div>
+                        {task.estimated_hours ? (
+                          <div className="w-20 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${
+                                Number(actualHours) > task.estimated_hours ? "bg-rose-500" : "bg-blue-500"
+                              }`}
+                              style={{
+                                width: `${Math.min(100, Math.round((Number(actualHours) / task.estimated_hours) * 100))}%`,
+                              }}
+                            />
+                          </div>
+                        ) : null}
+                      </td>
+
+                      {/* Attachments / Deliverables */}
+                      <td className="py-3 px-5">
+                        <div className="flex items-center gap-1.5">
+                          {attachmentCount > 0 ? (
+                            <span
+                              title={`${attachmentCount} file${attachmentCount > 1 ? "s" : ""} attached by mentor`}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/50"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                              </svg>
+                              <span>{attachmentCount}</span>
+                            </span>
+                          ) : null}
+
+                          {hasSubmissionDeliverable ? (
+                            <span
+                              title="Mentee has submitted deliverables"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/50"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              <span>Sub</span>
+                            </span>
+                          ) : null}
+
+                          {!attachmentCount && !hasSubmissionDeliverable && (
+                            <span className="text-slate-400 text-xs">—</span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3 px-5 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setSelectedTaskDetails(task)}
+                            className="px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800/50 transition-colors cursor-pointer flex items-center gap-1"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            <span>Details</span>
+                          </button>
+
+                          <button
+                            onClick={() => setTaskToDelete(task)}
+                            title="Delete Task"
+                            aria-label="Delete Task"
+                            className="p-1.5 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900/60 shadow-2xs transition-colors cursor-pointer"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {filteredTasks.length === 0 && (
+                  <tr>
+                    <td colSpan="8" className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
+                        <svg className="w-12 h-12 mb-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">No tasks found</p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                          {taskSearch || taskStatusFilter !== "All"
+                            ? "Try adjusting your search queries or active filters."
+                            : "No tasks have been assigned by mentors yet."}
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    )}
   </main>
 
       {/* CREATE MODAL */}
@@ -2205,6 +2906,328 @@ function AdminDashboard() {
           </div>
         );
       })()}
+
+      {/* Task Details Modal */}
+      {selectedTaskDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden text-slate-800 dark:text-slate-100">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <span className={`w-3 h-3 rounded-full ${getStatusBadge(selectedTaskDetails.status).dot}`} />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      {selectedTaskDetails.title}
+                    </h3>
+                    <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded border ${getStatusBadge(selectedTaskDetails.status).bg}`}>
+                      {getStatusBadge(selectedTaskDetails.status).label}
+                    </span>
+                    <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded border ${getPriorityBadge(selectedTaskDetails.priority)}`}>
+                      {selectedTaskDetails.priority || "medium"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Category: <span className="font-medium uppercase">{selectedTaskDetails.category || "upskill"}</span> • Created: {formatDate(selectedTaskDetails.createdAt)}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedTaskDetails(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl font-bold cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              {/* Top Info Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Mentee info */}
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Assigned Mentee</span>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs">
+                      {getInitials(selectedTaskDetails.mentee?.name || "Mentee")}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                        {selectedTaskDetails.mentee?.name || `Mentee #${selectedTaskDetails.mentee_id}`}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {selectedTaskDetails.mentee?.email || "No email available"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mentor info */}
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Assigned By (Mentor)</span>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs">
+                      {getInitials(selectedTaskDetails.assigner?.name || "Mentor")}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                        {selectedTaskDetails.assigner?.name || `Mentor #${selectedTaskDetails.assigned_by}`}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {selectedTaskDetails.assigner?.email || "No email available"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Timeline & Time Tracking Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Timeline */}
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Timeline Schedule</span>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">Start Date:</span>
+                    <span className="font-semibold">{formatDate(selectedTaskDetails.start_date)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">Due Date:</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">{formatDate(selectedTaskDetails.due_date)}</span>
+                  </div>
+                  {selectedTaskDetails.submitted_at && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Submitted On:</span>
+                      <span className="font-semibold text-amber-600 dark:text-amber-400">{formatDateTime(selectedTaskDetails.submitted_at)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Time Tracking */}
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Time Tracking</span>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">Actual Logged:</span>
+                    <span className="font-semibold text-blue-600 dark:text-blue-400">{(Number(selectedTaskDetails.actual_seconds || 0) / 3600).toFixed(2)} hours</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">Estimated Budget:</span>
+                    <span className="font-semibold">{selectedTaskDetails.estimated_hours ? `${selectedTaskDetails.estimated_hours} hours` : "None set"}</span>
+                  </div>
+                  {selectedTaskDetails.estimated_hours ? (
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden mt-1">
+                      <div
+                        className={`h-full rounded-full ${
+                          (Number(selectedTaskDetails.actual_seconds || 0) / 3600) > selectedTaskDetails.estimated_hours
+                            ? "bg-rose-500"
+                            : "bg-blue-600"
+                        }`}
+                        style={{
+                          width: `${Math.min(100, Math.round(((Number(selectedTaskDetails.actual_seconds || 0) / 3600) / selectedTaskDetails.estimated_hours) * 100))}%`,
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                  Task Brief & Instructions
+                </h4>
+                <div className="p-4 bg-slate-50/70 dark:bg-slate-900/40 rounded-xl border border-slate-200/80 dark:border-slate-700/80 text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                  {selectedTaskDetails.description || "No text description provided by mentor."}
+                </div>
+              </div>
+
+              {/* Mentor Attachments (ImageKit files) */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <span>Mentor Attached Files</span>
+                  <span className="text-[10px] font-normal text-slate-400">
+                    ({Array.isArray(selectedTaskDetails.attachments) ? selectedTaskDetails.attachments.length : 0})
+                  </span>
+                </h4>
+                {Array.isArray(selectedTaskDetails.attachments) && selectedTaskDetails.attachments.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedTaskDetails.attachments.map((att, i) => (
+                      <a
+                        key={att.id || i}
+                        href={att.url || "#"}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 flex items-center justify-between gap-2 text-xs transition-colors group shadow-2xs"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                          </svg>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 dark:text-slate-200 truncate group-hover:text-blue-600">
+                              {att.name || "Attachment"}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              {att.size ? `${(att.size / 1024).toFixed(1)} KB` : "File"}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-blue-600 dark:text-blue-400 text-xs font-semibold group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
+                          Open &rarr;
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic bg-slate-50/50 dark:bg-slate-900/30 p-3 rounded-lg border border-dashed border-slate-200 dark:border-slate-700">
+                    No files were attached by the mentor when assigning this task.
+                  </p>
+                )}
+              </div>
+
+              {/* Mentee Deliverables & Submissions */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                  Mentee Submission Deliverables
+                </h4>
+                {selectedTaskDetails.submission_url || selectedTaskDetails.demo_url || selectedTaskDetails.submission_notes ? (
+                  <div className="p-4 bg-emerald-50/40 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/80 dark:border-emerald-800/50 space-y-3">
+                    {selectedTaskDetails.submission_url && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-600 dark:text-slate-300 font-medium">Submission URL / Repo:</span>
+                        <a
+                          href={selectedTaskDetails.submission_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-semibold max-w-[320px] truncate"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                          <span className="truncate">{selectedTaskDetails.submission_url}</span>
+                        </a>
+                      </div>
+                    )}
+
+                    {selectedTaskDetails.demo_url && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-600 dark:text-slate-300 font-medium">Live Demo URL:</span>
+                        <a
+                          href={selectedTaskDetails.demo_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 font-semibold max-w-[320px] truncate"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          <span className="truncate">{selectedTaskDetails.demo_url}</span>
+                        </a>
+                      </div>
+                    )}
+
+                    {selectedTaskDetails.submission_notes && (
+                      <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40 text-xs">
+                        <span className="text-slate-500 font-medium block mb-1">Mentee Notes:</span>
+                        <p className="text-slate-700 dark:text-slate-200 whitespace-pre-wrap">{selectedTaskDetails.submission_notes}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic bg-slate-50/50 dark:bg-slate-900/30 p-3 rounded-lg border border-dashed border-slate-200 dark:border-slate-700">
+                    No deliverables have been submitted for this task yet.
+                  </p>
+                )}
+              </div>
+
+              {/* Mentor Review & Feedback */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                  Mentor Evaluation & Feedback
+                </h4>
+                {selectedTaskDetails.feedback || selectedTaskDetails.score !== null ? (
+                  <div className="p-4 bg-purple-50/40 dark:bg-purple-950/20 rounded-xl border border-purple-200/80 dark:border-purple-800/50 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-600 dark:text-slate-300 font-semibold">
+                        Evaluator: {selectedTaskDetails.evaluator?.name || `User #${selectedTaskDetails.evaluated_by}`}
+                      </span>
+                      {selectedTaskDetails.score !== null && (
+                        <span className="px-2 py-0.5 rounded font-bold bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
+                          Score: {selectedTaskDetails.score} / 100
+                        </span>
+                      )}
+                    </div>
+                    {selectedTaskDetails.evaluated_at && (
+                      <p className="text-[11px] text-slate-400">
+                        Evaluated on: {formatDateTime(selectedTaskDetails.evaluated_at)}
+                      </p>
+                    )}
+                    {selectedTaskDetails.feedback && (
+                      <div className="pt-2 border-t border-purple-200/60 dark:border-purple-800/40">
+                        <p className="text-slate-700 dark:text-slate-200 whitespace-pre-wrap">{selectedTaskDetails.feedback}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic bg-slate-50/50 dark:bg-slate-900/30 p-3 rounded-lg border border-dashed border-slate-200 dark:border-slate-700">
+                    This task has not been evaluated by a mentor yet.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3.5 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between bg-slate-50/60 dark:bg-slate-900/40 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setTaskToDelete(selectedTaskDetails)}
+                className="px-3 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 rounded-lg transition-colors cursor-pointer"
+              >
+                Delete Task
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedTaskDetails(null)}
+                className="px-4 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 border border-slate-200 dark:border-slate-700 rounded-lg transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ConfirmModal for User Deletion */}
+      {userToDelete && (
+        <ConfirmModal
+          isOpen={Boolean(userToDelete)}
+          title={`Delete ${userToDelete.isMentee ? "Mentee" : "Mentor"}`}
+          message={
+            userToDelete.isMentee
+              ? `Are you sure you want to delete ${userToDelete.name}? All tasks assigned to this mentee will also be permanently deleted. This action cannot be undone.`
+              : `Are you sure you want to delete ${userToDelete.name}? This action cannot be undone.`
+          }
+          confirmText={`Delete ${userToDelete.isMentee ? "Mentee" : "Mentor"}`}
+          variant="danger"
+          isLoading={actionLoading}
+          onClose={() => setUserToDelete(null)}
+          onConfirm={confirmDeleteUser}
+        />
+      )}
+
+      {/* ConfirmModal for Task Deletion */}
+      {taskToDelete && (
+        <ConfirmModal
+          isOpen={Boolean(taskToDelete)}
+          title="Delete Task"
+          message={`Are you sure you want to permanently delete task "${taskToDelete.title}"? All submissions, logged time sessions, and attached materials will be removed.`}
+          confirmText="Delete Task"
+          variant="danger"
+          isLoading={deleteTaskLoading}
+          onClose={() => setTaskToDelete(null)}
+          onConfirm={confirmDeleteTask}
+        />
+      )}
     </div>
   );
 }

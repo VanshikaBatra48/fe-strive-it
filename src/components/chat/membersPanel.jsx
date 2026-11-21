@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { chatApi } from '../../api/chatApi';
+import ConfirmModal from '../common/ConfirmModal';
 
 function getInitials(name = '') {
   if (!name) return 'U';
@@ -37,6 +38,9 @@ export default function MembersPanel({ groupId, me, onClose, onChanged, onDelete
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [actionInProgress, setActionInProgress] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -97,17 +101,12 @@ export default function MembersPanel({ groupId, me, onClose, onChanged, onDelete
     });
   };
 
-  const handleDelete = async () => {
-    if (
-      !window.confirm(
-        'Are you sure you want to permanently delete this group? All messages and attachments will be deleted forever.'
-      )
-    ) {
-      return;
-    }
+  const confirmDeleteGroup = async () => {
+    setActionInProgress(true);
     setError('');
     try {
       await chatApi.deleteGroup(groupId);
+      setShowDeleteConfirm(false);
       if (onDeleted) {
         onDeleted(groupId);
       } else {
@@ -116,6 +115,22 @@ export default function MembersPanel({ groupId, me, onClose, onChanged, onDelete
       }
     } catch (e) {
       setError(e?.response?.data?.message ?? 'Failed to delete group');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const confirmArchiveGroup = async () => {
+    setActionInProgress(true);
+    try {
+      await chatApi.archiveGroup(groupId);
+      setShowArchiveConfirm(false);
+      await load();
+      onChanged?.();
+    } catch (e) {
+      setError(e?.response?.data?.message ?? 'Failed to archive group');
+    } finally {
+      setActionInProgress(false);
     }
   };
 
@@ -367,14 +382,10 @@ export default function MembersPanel({ groupId, me, onClose, onChanged, onDelete
         {/* Management & Danger Actions */}
         <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
           {/* Archive Action (Allowed for active groups by manager) */}
-          {canManage && (
+          {canManage && group.status === 'active' && (
             <button
               type="button"
-              onClick={() => {
-                if (window.confirm('Archive this group? It will become read-only for all members.')) {
-                  run(() => chatApi.archiveGroup(groupId));
-                }
-              }}
+              onClick={() => setShowArchiveConfirm(true)}
               className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-200 dark:border-amber-800/60 transition-colors cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
@@ -384,11 +395,11 @@ export default function MembersPanel({ groupId, me, onClose, onChanged, onDelete
             </button>
           )}
 
-          {/* Delete Action (Strictly ONLY allowed when group is archived AND actor is admin) */}
-          {group.status === 'archived' && me.role === 'admin' && (
+          {/* Delete Action: Admins can delete groups at any time, even if not archived */}
+          {me.role === 'admin' && (
             <button
               type="button"
-              onClick={handleDelete}
+              onClick={() => setShowDeleteConfirm(true)}
               className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 border border-rose-200 dark:border-rose-900/60 transition-colors cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
@@ -398,6 +409,29 @@ export default function MembersPanel({ groupId, me, onClose, onChanged, onDelete
             </button>
           )}
         </div>
+
+        {/* Confirmation Modals */}
+        <ConfirmModal
+          isOpen={showArchiveConfirm}
+          variant="warning"
+          title="Archive Chat Group"
+          message={`Are you sure you want to archive "${group.name}"? It will become read-only for all members.`}
+          confirmText="Archive Group"
+          loading={actionInProgress}
+          onConfirm={confirmArchiveGroup}
+          onClose={() => setShowArchiveConfirm(false)}
+        />
+
+        <ConfirmModal
+          isOpen={showDeleteConfirm}
+          variant="danger"
+          title="Delete Group Permanently"
+          message={`Are you sure you want to permanently delete "${group.name}"? All messages, discussions, and attachments will be deleted forever.`}
+          confirmText="Delete Group"
+          loading={actionInProgress}
+          onConfirm={confirmDeleteGroup}
+          onClose={() => setShowDeleteConfirm(false)}
+        />
 
         {error && (
           <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 text-xs font-medium">

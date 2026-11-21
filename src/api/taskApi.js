@@ -32,7 +32,12 @@ export const taskApi = {
    * @returns {Promise<object>}
    */
   async createTask(taskData) {
-    const response = await apiClient.post('/tasks', taskData);
+    const isFormData = typeof FormData !== 'undefined' && taskData instanceof FormData;
+    const response = await apiClient.post(
+      '/tasks',
+      taskData,
+      isFormData ? { headers: { 'Content-Type': undefined } } : {}
+    );
     return response.data?.data;
   },
 

@@ -357,6 +357,7 @@ const MenteeDashboard = () => {
     demo_url: "",
     submission_notes: "",
   });
+  const [submissionFile, setSubmissionFile] = useState(null);
 
 
 
@@ -450,7 +451,14 @@ const MenteeDashboard = () => {
     return tasks.find((t) => Boolean(t.feedback) || t.status === "complete") || null;
   }, [tasks]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (activeTimer?.log?.task_id) {
+      try {
+        await stopTaskTimer(activeTimer.log.task_id);
+      } catch (err) {
+        console.warn("Could not stop active timer before logout:", err);
+      }
+    }
     logout();
     navigate("/");
   };
@@ -537,18 +545,29 @@ const MenteeDashboard = () => {
   setActionLoading(true);
 
   try {
-    const payload = {
-      submissionText: submissionForm.submission_notes.trim(),
-      attachmentUrl: submissionForm.submission_url.trim(),
-    };
+    const notes = submissionForm.submission_notes.trim();
+    const url = submissionForm.submission_url.trim();
 
     // Validate submission
-    if (!payload.submissionText) {
+    if (!notes) {
       throw new Error("Please enter your submission notes.");
     }
 
-    if (!payload.attachmentUrl) {
-      throw new Error("Please provide your submission URL.");
+    if (!url && !submissionFile) {
+      throw new Error("Please provide a submission URL or attach a file.");
+    }
+
+    let payload;
+    if (submissionFile) {
+      payload = new FormData();
+      payload.append("submissionText", notes);
+      if (url) payload.append("attachmentUrl", url);
+      payload.append("attachment", submissionFile);
+    } else {
+      payload = {
+        submissionText: notes,
+        attachmentUrl: url,
+      };
     }
 
     const res = await submitTaskVersion(taskId, payload);
@@ -559,6 +578,7 @@ const MenteeDashboard = () => {
 
     // Close modal and reset form
     setSubmittingTask(null);
+    setSubmissionFile(null);
 
     setSubmissionForm({
       submission_url: "",
@@ -1669,84 +1689,154 @@ const MenteeDashboard = () => {
         )}
       </main>
 
-      {/* MODAL: SUBMIT ASSIGNMENT */}
+      {/* MODAL: SUBMIT ASSIGNMENT (FITS ON SCREEN, NON-SCROLLABLE 2-COLUMN LAYOUT) */}
       {submittingTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6 text-slate-800 dark:text-slate-100">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">Submit Deliverable</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{submittingTask.title}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-2xl w-full p-5 text-slate-800 dark:text-slate-100 max-h-[96vh] overflow-y-auto md:overflow-visible">
+            <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-700">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                  🚀
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">Submit Deliverable</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-md">{submittingTask.title}</p>
+                </div>
               </div>
               <button
                 onClick={() => setSubmittingTask(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 text-xl leading-none cursor-pointer flex-shrink-0"
+                aria-label="Close"
               >
                 &times;
               </button>
             </div>
 
-            <form onSubmit={handleSubmitTask} className="mt-4 space-y-4">
+            <form onSubmit={handleSubmitTask} className="mt-3">
               {submitError && (
-                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 rounded-lg text-xs font-medium">
+                <div className="mb-3 p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 rounded-lg text-xs font-medium">
                   {submitError}
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                  Submission URL (GitHub / Document) <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="url"
-                  required
-                  placeholder="https://github.com/username/project-repo"
-                  value={submissionForm.submission_url}
-                  onChange={(e) => setSubmissionForm({ ...submissionForm, submission_url: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* LEFT COLUMN: Links & Attachment */}
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                      Submission URL (GitHub / Document)
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://github.com/username/project-repo"
+                      value={submissionForm.submission_url}
+                      onChange={(e) => setSubmissionForm({ ...submissionForm, submission_url: e.target.value })}
+                      className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                      Live Demo URL (Optional)
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://my-app.vercel.app"
+                      value={submissionForm.demo_url}
+                      onChange={(e) => setSubmissionForm({ ...submissionForm, demo_url: e.target.value })}
+                      className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                      Attach Deliverable File (Optional)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="file"
+                        id="submission-attachment"
+                        onChange={(e) => setSubmissionFile(e.target.files[0] || null)}
+                        className="block w-full text-xs text-slate-500 file:mr-2.5 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 dark:file:bg-emerald-950/40 dark:file:text-emerald-300 cursor-pointer"
+                      />
+                      {submissionFile && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSubmissionFile(null);
+                            const el = document.getElementById("submission-attachment");
+                            if (el) el.value = "";
+                          }}
+                          className="text-slate-400 hover:text-rose-500 text-xs px-1 cursor-pointer font-bold"
+                          title="Remove file"
+                        >
+                          &times;
+                        </button>
+                      )}
+                    </div>
+                    {submissionFile && (
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1 truncate">
+                        📎 {submissionFile.name} ({formatFileSize(submissionFile.size)})
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* RIGHT COLUMN: Notes & Mentor Requirements */}
+                <div className="space-y-2.5 flex flex-col justify-between">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                      Comments / Notes for Mentor
+                    </label>
+                    <textarea
+                      rows="4"
+                      placeholder="Explain your solution, testing notes, or approach..."
+                      value={submissionForm.submission_notes}
+                      onChange={(e) => setSubmissionForm({ ...submissionForm, submission_notes: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 leading-relaxed"
+                    />
+
+                    {/* Mentor Attachments Reference */}
+                    {Array.isArray(submittingTask.attachments) && submittingTask.attachments.length > 0 && (
+                      <div className="mt-2 p-2 bg-slate-50 dark:bg-slate-900/60 rounded-lg border border-slate-100 dark:border-slate-700">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
+                          Mentor Brief Files ({submittingTask.attachments.length})
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {submittingTask.attachments.map((att, i) => (
+                            <a
+                              key={att.id ?? i}
+                              href={att.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              download={att.name}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 text-[10px] font-medium border border-slate-200 dark:border-slate-700 hover:underline"
+                            >
+                              📎 {att.name}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                  Live Demo URL (Optional)
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://my-app.vercel.app"
-                  value={submissionForm.demo_url}
-                  onChange={(e) => setSubmissionForm({ ...submissionForm, demo_url: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
-                  Comments / Notes for Mentor
-                </label>
-                <textarea
-                  rows="3"
-                  placeholder="Explain your approach, challenges solved, or testing notes..."
-                  value={submissionForm.submission_notes}
-                  onChange={(e) => setSubmissionForm({ ...submissionForm, submission_notes: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
+              {/* MODAL FOOTER */}
+              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setSubmittingTask(null)}
-                  className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer flex items-center gap-2"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer flex items-center gap-2 transition-colors"
                 >
-                  {actionLoading ? "Submitting..." : "Submit for Review"}
+                  {actionLoading ? "Submitting..." : "Submit Deliverable"}
                 </button>
               </div>
             </form>
