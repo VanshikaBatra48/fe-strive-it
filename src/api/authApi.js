@@ -60,6 +60,20 @@ export const authApi = {
     return response.data;
   },
 
+   /**
+   * Change password for an already-logged-in user (requires current password)
+   * @param {{currentPassword: string, newPassword: string, confirmPassword: string}} payload
+   * @returns {Promise<{success: boolean, message: string}>}
+   */
+  async updatePassword({ currentPassword, newPassword, confirmPassword }) {
+    const response = await apiClient.patch('/users/update-password', {
+      currentPassword,
+      newPassword,
+      confirmPassword,
+    });
+    return response.data;
+  },
+
   /**
    * Mark first login as completed for a user ID
    * @param {number|string} id
@@ -73,5 +87,7 @@ export const authApi = {
     return response.data;
   },
 };
+
+
 
 export default authApi;
