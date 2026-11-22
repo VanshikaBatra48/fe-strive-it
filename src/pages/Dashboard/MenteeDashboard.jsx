@@ -539,44 +539,47 @@ const MenteeDashboard = () => {
   const handleSubmitTask = async (e) => {
     e.preventDefault();
 
-  if (!submittingTask) return;
+    if (!submittingTask) return;
 
-  const taskId = submittingTask.id;
+    const taskId = submittingTask.id;
 
-  setSubmitError("");
-  setActionLoading(true);
+    setSubmitError("");
+    setActionLoading(true);
 
-  try {
-    const notes = submissionForm.submission_notes.trim();
-    const url = submissionForm.submission_url.trim();
+    try {
+      const notes = submissionForm.submission_notes.trim();
+      const url = submissionForm.submission_url.trim();
+      const demo = submissionForm.demo_url ? submissionForm.demo_url.trim() : "";
 
-    // Validate submission
-    if (!notes) {
-      throw new Error("Please enter your submission notes.");
-    }
+      // Validate submission
+      if (!notes) {
+        throw new Error("Please enter your comments / submission notes.");
+      }
 
-    if (!url && !submissionFile) {
-      throw new Error("Please provide a submission URL or attach a file.");
-    }
+      if (!url && !submissionFile) {
+        throw new Error("Please provide a submission URL or attach a deliverable file.");
+      }
 
-    let payload;
-    if (submissionFile) {
-      payload = new FormData();
-      payload.append("submissionText", notes);
-      if (url) payload.append("attachmentUrl", url);
-      payload.append("attachment", submissionFile);
-    } else {
-      payload = {
-        submissionText: notes,
-        attachmentUrl: url,
-      };
-    }
+      let payload;
+      if (submissionFile) {
+        payload = new FormData();
+        payload.append("submissionText", notes);
+        if (url) payload.append("submissionUrl", url);
+        if (demo) payload.append("demoUrl", demo);
+        payload.append("attachment", submissionFile);
+      } else {
+        payload = {
+          submissionText: notes,
+          submissionUrl: url || null,
+          demoUrl: demo || null,
+        };
+      }
 
-    const res = await submitTaskVersion(taskId, payload);
+      const res = await submitTaskVersion(taskId, payload);
 
-    if (res.success === false) {
-      throw new Error(res.message || res.error || "Submission failed");
-    }
+      if (res.success === false) {
+        throw new Error(res.message || res.error || "Submission failed");
+      }
 
     // Close modal and reset form
     setSubmittingTask(null);
@@ -1384,52 +1387,102 @@ const MenteeDashboard = () => {
                           </p>
                         ) : submissionHistories[task.id]?.length > 0 ? (
 
-                          submissionHistories[task.id].map((submission) => (
-                            <div
-                              key={submission.id}
-                              className="p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50"
-                            >
-                              <div className="flex items-center justify-between gap-2">
+                          submissionHistories[task.id].map((submission) => {
+                            const subUrl = submission.submissionUrl || submission.submission_url || (submission.attachmentUrl && !submission.attachmentUrl.includes("ik.imagekit.io") ? submission.attachmentUrl : null);
+                            const demoUrl = submission.demoUrl || submission.demo_url;
+                            const attachUrl = (submission.attachmentUrl && submission.attachmentUrl.includes("ik.imagekit.io")) ? submission.attachmentUrl : (!subUrl && submission.attachmentUrl ? submission.attachmentUrl : null);
+                            const text = submission.submissionText || submission.submission_text;
+                            const feedback = submission.mentorFeedback || submission.mentor_feedback;
 
-                                <span className="text-xs font-bold text-slate-800 dark:text-white">
-                                  Submission {submission.version}
-                                </span>
-
-                                <SubmissionStatus status={submission.status} />
-
-                              </div>
-
-                              {submission.submissionText && (
-                                <p className="text-xs mt-2 text-slate-600 dark:text-slate-300">
-                                  {submission.submissionText}
-                                </p>
-                              )}
-
-                              {submission.attachmentUrl && (
-                                <a
-                                  href={submission.attachmentUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="block mt-2 text-xs text-emerald-600 hover:underline"
-                                >
-                                  View Submission
-                                </a>
-                              )}
-
-                              {submission.mentorFeedback && (
-                                <div className="mt-3 p-2 rounded bg-orange-50 dark:bg-orange-950/30">
-                                  <p className="text-xs font-bold text-orange-700 dark:text-orange-300">
-                                    Mentor Feedback
-                                  </p>
-
-                                  <p className="text-xs mt-1 text-slate-700 dark:text-slate-300">
-                                    {submission.mentorFeedback}
-                                  </p>
+                            return (
+                              <div
+                                key={submission.id}
+                                className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 shadow-2xs space-y-2.5"
+                              >
+                                <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-800 dark:text-white">
+                                      Submission {submission.version}
+                                    </span>
+                                    {submission.createdAt && (
+                                      <span className="text-[11px] text-slate-400">
+                                        • {formatDueDateTime(submission.createdAt)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <SubmissionStatus status={submission.status} />
                                 </div>
-                              )}
 
-                            </div>
-                          ))
+                                {/* Deliverable URLs and Attached Files */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                  {subUrl && (
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className="font-semibold text-slate-500 shrink-0">Code / Link:</span>
+                                      <a
+                                        href={subUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-blue-600 dark:text-blue-400 hover:underline truncate font-mono"
+                                      >
+                                        {subUrl}
+                                      </a>
+                                    </div>
+                                  )}
+
+                                  {demoUrl && (
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className="font-semibold text-slate-500 shrink-0">Live Demo:</span>
+                                      <a
+                                        href={demoUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-emerald-600 dark:text-emerald-400 hover:underline truncate font-mono"
+                                      >
+                                        {demoUrl}
+                                      </a>
+                                    </div>
+                                  )}
+
+                                  {attachUrl && (
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className="font-semibold text-slate-500 shrink-0">Attachment:</span>
+                                      <a
+                                        href={attachUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-1 font-medium truncate"
+                                      >
+                                        <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                        </svg>
+                                        <span>Download / View Attachment</span>
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {text && (
+                                  <div className="text-xs pt-1 border-t border-slate-100 dark:border-slate-800">
+                                    <span className="font-semibold text-slate-500 block mb-0.5">Your Comments:</span>
+                                    <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap bg-slate-50 dark:bg-slate-800/40 p-2 rounded border border-slate-100 dark:border-slate-800">
+                                      {text}
+                                    </p>
+                                  </div>
+                                )}
+
+                                {feedback && (
+                                  <div className="mt-2 p-2.5 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50">
+                                    <p className="text-xs font-bold text-amber-800 dark:text-amber-300">
+                                      Mentor Feedback
+                                    </p>
+                                    <p className="text-xs mt-1 text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                                      {feedback}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })
 
                         ) : (
                           <p className="text-xs text-slate-500">

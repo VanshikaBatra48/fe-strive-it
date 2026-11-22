@@ -5,7 +5,7 @@ import useAuth from "../../hooks/useAuth";
 import useUsers from "../../hooks/useUsers";
 import taskApi from "../../api/taskApi";
 import ConfirmModal from "../../components/common/ConfirmModal";
-import ChangePasswordModal from "../../components/common/ChangePasswordModal";
+import ChangePasswordModal from "../../components/common/ChangePasswordModal"
 
 // Helper to get 2-letter initials
 function getInitials(name = "") {
@@ -57,7 +57,6 @@ function AdminDashboard() {
   }, [searchParams]);
 
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [showChangePassword, setShowChangePassword] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [modalError, setModalError] = useState("");
   const [notification, setNotification] = useState(null);
@@ -93,13 +92,13 @@ function AdminDashboard() {
 
 
   const handleLogout = async () => {
-  try {
-    await logout();
-    navigate("/", { replace: true });
-  } catch (error) {
-    console.error("Logout failed:", error);
-  }
-};
+    try {
+      await logout();
+      navigate("/", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
   // Search & filter states
   const [mentorSearch, setMentorSearch] = useState("");
   const [mentorFilter, setMentorFilter] = useState("All");
@@ -346,8 +345,8 @@ function AdminDashboard() {
     const selectedCreateMentor =
       createRole === "mentee" && formData.mentor
         ? mentors.find(
-            (m) => m.name?.toLowerCase() === formData.mentor.trim().toLowerCase()
-          ) || null
+          (m) => m.name?.toLowerCase() === formData.mentor.trim().toLowerCase()
+        ) || null
         : null;
 
     setModalError("");
@@ -359,9 +358,9 @@ function AdminDashboard() {
       status: formData.status || "Active",
       ...(createRole === "mentee"
         ? {
-            mentor_id: selectedCreateMentor ? selectedCreateMentor.id : null,
-            mentor: formData.mentor ? formData.mentor.trim() : null,
-          }
+          mentor_id: selectedCreateMentor ? selectedCreateMentor.id : null,
+          mentor: formData.mentor ? formData.mentor.trim() : null,
+        }
         : { mentor: null }),
       assignedMentees: createRole === "mentor" ? (formData.assignedMentees || []) : [],
     });
@@ -387,8 +386,8 @@ function AdminDashboard() {
     const selectedEditMentor =
       editingUser.role === "mentee" && editingUser.mentor
         ? mentors.find(
-            (m) => m.name?.toLowerCase() === editingUser.mentor.trim().toLowerCase()
-          ) || null
+          (m) => m.name?.toLowerCase() === editingUser.mentor.trim().toLowerCase()
+        ) || null
         : null;
 
     setModalError("");
@@ -400,9 +399,9 @@ function AdminDashboard() {
       role: editingUser.role,
       ...(editingUser.role === "mentee"
         ? {
-            mentor_id: selectedEditMentor ? selectedEditMentor.id : null,
-            mentor: editingUser.mentor ? editingUser.mentor.trim() : null,
-          }
+          mentor_id: selectedEditMentor ? selectedEditMentor.id : null,
+          mentor: editingUser.mentor ? editingUser.mentor.trim() : null,
+        }
         : { mentor: null }),
     });
     setActionLoading(false);
@@ -652,11 +651,10 @@ function AdminDashboard() {
           <nav className="px-3 space-y-1 overflow-y-auto no-scrollbar [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none] flex-1">
             <button
               onClick={() => setActiveTab("dashboard")}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === "dashboard"
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "dashboard"
                   ? "bg-blue-600 text-white shadow-xs"
                   : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-              }`}
+                }`}
             >
               <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -666,11 +664,10 @@ function AdminDashboard() {
 
             <button
               onClick={() => setActiveTab("mentors")}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === "mentors"
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "mentors"
                   ? "bg-blue-600 text-white shadow-xs"
                   : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-              }`}
+                }`}
             >
               <div className="flex items-center gap-3.5">
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
@@ -685,11 +682,10 @@ function AdminDashboard() {
 
             <button
               onClick={() => setActiveTab("mentees")}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === "mentees"
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "mentees"
                   ? "bg-blue-600 text-white shadow-xs"
                   : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-              }`}
+                }`}
             >
               <div className="flex items-center gap-3.5">
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
@@ -704,11 +700,10 @@ function AdminDashboard() {
 
             <button
               onClick={() => setActiveTab("tasks")}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === "tasks"
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "tasks"
                   ? "bg-blue-600 text-white shadow-xs"
                   : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-              }`}
+                }`}
             >
               <div className="flex items-center gap-3.5">
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
@@ -762,68 +757,56 @@ function AdminDashboard() {
               {activeTab === "mentors"
                 ? "Mentors Management"
                 : activeTab === "mentees"
-                ? "Mentees Management"
-                : activeTab === "tasks"
-                ? "All Tasks & Assignments"
-                : "Admin Portal"}
+                  ? "Mentees Management"
+                  : activeTab === "tasks"
+                    ? "All Tasks & Assignments"
+                    : "Admin Portal"}
             </span>
           </div>
 
           <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate("/chat")}
-            title="Messages"
-            aria-label="Messages"
-            className="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-white bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs hover:shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 text-xs font-semibold"
-          >
-            <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            <span className="hidden sm:inline">Messages</span>
-          </button>
-
-          <ThemeToggle />
-
-          <div className="relative">
             <button
-              onClick={() => setShowProfileMenu(!showProfileMenu)}
-              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              type="button"
+              onClick={() => navigate("/chat")}
+              title="Messages"
+              aria-label="Messages"
+              className="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-white bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs hover:shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 text-xs font-semibold"
             >
-              <div className="w-8 h-8 rounded-full bg-slate-800 dark:bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                {getInitials(currentUser?.name || "Admin")}
-              </div>
-              <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                {currentUser?.name?.split(" ")[0] || "Admin"}
-              </span>
-              <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+              <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
+              <span className="hidden sm:inline">Messages</span>
             </button>
 
-            {/* Profile Menu Dropdown */}
-            {showProfileMenu && (
-              <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-2 z-50">
-                <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-700">
-                  <p className="text-xs font-semibold text-slate-900 dark:text-white">{currentUser?.name || "Administrator"}</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">{currentUser?.email || "admin@example.com"}</p>
-                  <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
-                    Administrator
-                  </span>
+            <ThemeToggle />
+
+            <div className="relative">
+              <button
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <div className="w-8 h-8 rounded-full bg-slate-800 dark:bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                  {getInitials(currentUser?.name || "Admin")}
                 </div>
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  {currentUser?.name?.split(" ")[0] || "Admin"}
+                </span>
+                <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {/* Profile Menu Dropdown */}
+              {showProfileMenu && (
+                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-2 z-50">
+                  <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-700">
+                    <p className="text-xs font-semibold text-slate-900 dark:text-white">{currentUser?.name || "Administrator"}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">{currentUser?.email || "admin@example.com"}</p>
+                    <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
+                      Administrator
+                    </span>
+                  </div>
                   <div className="border-t border-slate-100 dark:border-slate-700 pt-1">
-                    <button
-                      onClick={() => {
-                        setShowProfileMenu(false);
-                        setShowChangePassword(true);
-                      }}
-                      className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
-                      <span>Change Password</span>
-                    </button>
 
                     <button
                       onClick={handleLogout}
@@ -835,20 +818,19 @@ function AdminDashboard() {
                       <span>Sign Out</span>
                     </button>
                   </div>
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Notification Toast */}
         {notification && (
           <div
-            className={`mb-5 p-3.5 rounded-xl text-sm flex items-center justify-between shadow-xs animate-fadeIn border ${
-              notification.type === "error"
+            className={`mb-5 p-3.5 rounded-xl text-sm flex items-center justify-between shadow-xs animate-fadeIn border ${notification.type === "error"
                 ? "bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-300"
                 : "bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2.5">
               {notification.type === "error" ? (
@@ -1004,11 +986,10 @@ function AdminDashboard() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                   </div>
-                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                    menteesWithoutMentor.length > 0
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${menteesWithoutMentor.length > 0
                       ? "bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300"
                       : "bg-emerald-50 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-300"
-                  }`}>
+                    }`}>
                     {menteesWithoutMentor.length > 0 ? "Action Required" : "All Paired"}
                   </span>
                 </div>
@@ -1205,11 +1186,10 @@ function AdminDashboard() {
                           <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
                             {assignedMentees.length} mentee{assignedMentees.length !== 1 ? "s" : ""}
                           </span>
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                            mentor.status?.toLowerCase() === "inactive"
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${mentor.status?.toLowerCase() === "inactive"
                               ? "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
                               : "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
-                          }`}>
+                            }`}>
                             {mentor.status}
                           </span>
                         </div>
@@ -1253,11 +1233,10 @@ function AdminDashboard() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                            mentee.status?.toLowerCase() === "inactive"
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${mentee.status?.toLowerCase() === "inactive"
                               ? "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
                               : "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
-                          }`}>
+                            }`}>
                             {mentee.status}
                           </span>
                         </div>
@@ -1357,959 +1336,947 @@ function AdminDashboard() {
               id="mentor-section"
               className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200/80 dark:border-slate-700/80 mb-8 overflow-hidden"
             >
-          {/* Card Header */}
-          <div className="p-6 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                </svg>
+              {/* Card Header */}
+              <div className="p-6 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">Mentor List</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      View and manage all mentors in the system.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => openCreate("mentor")}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
+                >
+                  <span>+</span>
+                  <span>Create Mentor</span>
+                </button>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">Mentor List</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  View and manage all mentors in the system.
-                </p>
-              </div>
-            </div>
 
-            <button
-              onClick={() => openCreate("mentor")}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
-            >
-              <span>+</span>
-              <span>Create Mentor</span>
-            </button>
-          </div>
-
-          {/* Card Toolbar */}
-          <div className="px-6 py-3 border-t border-slate-100 dark:border-slate-700/80 flex flex-col sm:flex-row items-center gap-3">
-            <div className="relative flex-1 w-full">
-              <svg
-                className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search mentors by name or email..."
-                value={mentorSearch}
-                onChange={(e) => setMentorSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <select
-                value={mentorFilter}
-                onChange={(e) => setMentorFilter(e.target.value)}
-                className="w-28 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
-              >
-                <option value="All">All</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50/70 dark:bg-slate-900/60 border-y border-slate-200/80 dark:border-slate-700/80">
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    Joined On
-                  </th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    On Board
-                  </th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider w-48 min-w-[190px]">
-                    Assigned Mentees
-                  </th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/80">
-                {filteredMentors.map((mentor) => (
-                  <tr
-                    key={mentor.id}
-                    className="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors"
+              {/* Card Toolbar */}
+              <div className="px-6 py-3 border-t border-slate-100 dark:border-slate-700/80 flex flex-col sm:flex-row items-center gap-3">
+                <div className="relative flex-1 w-full">
+                  <svg
+                    className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-3 text-left">
-                        <div
-                          className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-2xs ${mentor.avatarBg}`}
-                        >
-                          {getInitials(mentor.name)}
-                        </div>
-                        <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                          {mentor.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
-                      {mentor.email}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-200/60 dark:border-blue-500/30">
-                        Mentor
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
-                      {mentor.joinedOn}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                          mentor.status?.toLowerCase() === "inactive"
-                            ? "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
-                            : "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
-                        }`}
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search mentors by name or email..."
+                    value={mentorSearch}
+                    onChange={(e) => setMentorSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <select
+                    value={mentorFilter}
+                    onChange={(e) => setMentorFilter(e.target.value)}
+                    className="w-28 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                  >
+                    <option value="All">All</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/70 dark:bg-slate-900/60 border-y border-slate-200/80 dark:border-slate-700/80">
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        Role
+                      </th>
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        Joined On
+                      </th>
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        On Board
+                      </th>
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider w-48 min-w-[190px]">
+                        Assigned Mentees
+                      </th>
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700/80">
+                    {filteredMentors.map((mentor) => (
+                      <tr
+                        key={mentor.id}
+                        className="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors"
                       >
-                        {mentor.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                          (mentor.on_Board ?? mentor.on_board ?? mentor.onBoard)
-                            ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
-                            : "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30"
-                        }`}
-                      >
-                        {(mentor.on_Board ?? mentor.on_board ?? mentor.onBoard) ? "Completed" : "Pending"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap w-48 min-w-[190px]">
-                      {(() => {
-                        const assignedMentees = mentees.filter((m) =>
-                          m.mentorId
-                            ? m.mentorId === mentor.id
-                            : m.mentor?.toLowerCase() === mentor.name.toLowerCase()
-                        );
-                        return (
-                          <div className="w-48">
-                            <select
-                              value=""
-                              disabled={assignedMentees.length === 0}
-                              className={`w-full truncate border rounded-lg px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all ${
-                                assignedMentees.length === 0
-                                  ? "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 text-slate-400 dark:text-slate-500 cursor-not-allowed"
-                                  : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer shadow-2xs"
-                              }`}
-                              onChange={() => {}}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-3 text-left">
+                            <div
+                              className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-2xs ${mentor.avatarBg}`}
                             >
-                              <option value="" disabled>
-                                {assignedMentees.length === 0
-                                  ? "No mentees assigned"
-                                  : `${assignedMentees.length} Mentee${assignedMentees.length > 1 ? "s" : ""} Assigned`}
-                              </option>
-                              {assignedMentees.map((m) => (
-                                <option key={m.id} value={m.id}>
-                                  {m.name} ({m.email})
-                                </option>
-                              ))}
-                            </select>
+                              {getInitials(mentor.name)}
+                            </div>
+                            <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                              {mentor.name}
+                            </span>
                           </div>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        {/* Edit Button */}
-                        <button
-                          onClick={() => setEditingUser({ ...mentor })}
-                          title="Edit User"
-                          aria-label="Edit User"
-                          className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg border border-slate-300 dark:border-slate-700 shadow-2xs transition-colors cursor-pointer"
-                        >
-                          <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                          </svg>
-                        </button>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
+                          {mentor.email}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-200/60 dark:border-blue-500/30">
+                            Mentor
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
+                          {mentor.joinedOn}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${mentor.status?.toLowerCase() === "inactive"
+                                ? "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
+                                : "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
+                              }`}
+                          >
+                            {mentor.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${(mentor.on_Board ?? mentor.on_board ?? mentor.onBoard)
+                                ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
+                                : "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30"
+                              }`}
+                          >
+                            {(mentor.on_Board ?? mentor.on_board ?? mentor.onBoard) ? "Completed" : "Pending"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap w-48 min-w-[190px]">
+                          {(() => {
+                            const assignedMentees = mentees.filter((m) =>
+                              m.mentorId
+                                ? m.mentorId === mentor.id
+                                : m.mentor?.toLowerCase() === mentor.name.toLowerCase()
+                            );
+                            return (
+                              <div className="w-48">
+                                <select
+                                  value=""
+                                  disabled={assignedMentees.length === 0}
+                                  className={`w-full truncate border rounded-lg px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all ${assignedMentees.length === 0
+                                      ? "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 text-slate-400 dark:text-slate-500 cursor-not-allowed"
+                                      : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer shadow-2xs"
+                                    }`}
+                                  onChange={() => { }}
+                                >
+                                  <option value="" disabled>
+                                    {assignedMentees.length === 0
+                                      ? "No mentees assigned"
+                                      : `${assignedMentees.length} Mentee${assignedMentees.length > 1 ? "s" : ""} Assigned`}
+                                  </option>
+                                  {assignedMentees.map((m) => (
+                                    <option key={m.id} value={m.id}>
+                                      {m.name} ({m.email})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            {/* Edit Button */}
+                            <button
+                              onClick={() => setEditingUser({ ...mentor })}
+                              title="Edit User"
+                              aria-label="Edit User"
+                              className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg border border-slate-300 dark:border-slate-700 shadow-2xs transition-colors cursor-pointer"
+                            >
+                              <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                            </button>
 
-                        {/* Delete Button */}
-                        <button
-                          onClick={() => handleDelete(mentor.id, mentor.name)}
-                          title="Delete User"
-                          aria-label="Delete User"
-                          className="p-1.5 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900/60 shadow-2xs transition-colors cursor-pointer"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                            {/* Delete Button */}
+                            <button
+                              onClick={() => handleDelete(mentor.id, mentor.name)}
+                              title="Delete User"
+                              aria-label="Delete User"
+                              className="p-1.5 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900/60 shadow-2xs transition-colors cursor-pointer"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
 
-                {filteredMentors.length === 0 && (
-                  <tr>
-                    <td colSpan="8" className="px-6 py-8 text-center text-slate-400 dark:text-slate-400 text-sm">
-                      No mentors found matching your search.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                    {filteredMentors.length === 0 && (
+                      <tr>
+                        <td colSpan="8" className="px-6 py-8 text-center text-slate-400 dark:text-slate-400 text-sm">
+                          No mentors found matching your search.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </div>
-        </section>
-      </div>
-    )}
+        )}
 
-    {/* ========================================================
+        {/* ========================================================
         TAB 3: MENTEES SEPARATE PAGE
         ======================================================== */}
-    {activeTab === "mentees" && (
-      <div>
-        {/* Page Title & Actions */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        {activeTab === "mentees" && (
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-              Mentees Management
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              View, track, and assign mentors to all mentees in the training program.
-            </p>
-          </div>
-          <button
-            onClick={() => openCreate("mentee")}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
-          >
-            <span className="text-lg leading-none">+</span>
-            <span>Create Mentee</span>
-          </button>
-        </div>
-
-        {/* Mentees Stats Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {/* Total Mentees */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
-            <div className="w-11 h-11 rounded-lg bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Mentees</p>
-              <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">{mentees.length}</h3>
-            </div>
-          </div>
-
-          {/* Active Mentees */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
-            <div className="w-11 h-11 rounded-lg bg-emerald-600/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Mentees</p>
-              <h3 className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">{activeMenteesCount}</h3>
-            </div>
-          </div>
-
-          {/* Assigned to Mentor */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
-            <div className="w-11 h-11 rounded-lg bg-indigo-600/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Assigned to Mentor</p>
-              <h3 className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-0.5">{menteesWithMentor.length}</h3>
-            </div>
-          </div>
-
-          {/* Needs Mentor */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
-            <div className="w-11 h-11 rounded-lg bg-amber-600/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Needs Mentor</p>
-              <h3 className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-0.5">{menteesWithoutMentor.length}</h3>
-            </div>
-          </div>
-        </div>
-
-        {/* Mentee List Section */}
-        <section
-          id="mentee-section"
-          className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200/80 dark:border-slate-700/80 mb-8 overflow-hidden"
-        >
-          {/* Card Header */}
-          <div className="p-6 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
-                </svg>
-              </div>
+            {/* Page Title & Actions */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">Mentee List</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  View and manage all mentees in the system.
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+                  Mentees Management
+                </h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  View, track, and assign mentors to all mentees in the training program.
                 </p>
               </div>
+              <button
+                onClick={() => openCreate("mentee")}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
+              >
+                <span className="text-lg leading-none">+</span>
+                <span>Create Mentee</span>
+              </button>
             </div>
 
-            <button
-              onClick={() => openCreate("mentee")}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
+            {/* Mentees Stats Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {/* Total Mentees */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+                <div className="w-11 h-11 rounded-lg bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Mentees</p>
+                  <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">{mentees.length}</h3>
+                </div>
+              </div>
+
+              {/* Active Mentees */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+                <div className="w-11 h-11 rounded-lg bg-emerald-600/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Mentees</p>
+                  <h3 className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">{activeMenteesCount}</h3>
+                </div>
+              </div>
+
+              {/* Assigned to Mentor */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+                <div className="w-11 h-11 rounded-lg bg-indigo-600/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Assigned to Mentor</p>
+                  <h3 className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-0.5">{menteesWithMentor.length}</h3>
+                </div>
+              </div>
+
+              {/* Needs Mentor */}
+              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
+                <div className="w-11 h-11 rounded-lg bg-amber-600/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Needs Mentor</p>
+                  <h3 className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-0.5">{menteesWithoutMentor.length}</h3>
+                </div>
+              </div>
+            </div>
+
+            {/* Mentee List Section */}
+            <section
+              id="mentee-section"
+              className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200/80 dark:border-slate-700/80 mb-8 overflow-hidden"
             >
-              <span>+</span>
-              <span>Create Mentee</span>
-            </button>
-          </div>
+              {/* Card Header */}
+              <div className="p-6 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">Mentee List</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      View and manage all mentees in the system.
+                    </p>
+                  </div>
+                </div>
 
-          {/* Card Toolbar */}
-          <div className="px-6 py-3 border-t border-slate-100 dark:border-slate-700/80 flex flex-col sm:flex-row items-center gap-3">
-            <div className="relative flex-1 w-full">
-              <svg
-                className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search mentees by name or email..."
-                value={menteeSearch}
-                onChange={(e) => setMenteeSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-              />
-            </div>
+                <button
+                  onClick={() => openCreate("mentee")}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
+                >
+                  <span>+</span>
+                  <span>Create Mentee</span>
+                </button>
+              </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <select
-                value={menteeFilter}
-                onChange={(e) => setMenteeFilter(e.target.value)}
-                className="w-28 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
-              >
-                <option value="All">All</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50/70 dark:bg-slate-900/60 border-y border-slate-200/80 dark:border-slate-700/80">
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    Assigned Mentor
-                  </th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    Joined On
-                  </th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    On Board
-                  </th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/80">
-                {filteredMentees.map((mentee) => {
-                  const assignedMentor = resolveMenteeMentor(mentee);
-                  return (
-                  <tr
-                    key={mentee.id}
-                    className="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors"
+              {/* Card Toolbar */}
+              <div className="px-6 py-3 border-t border-slate-100 dark:border-slate-700/80 flex flex-col sm:flex-row items-center gap-3">
+                <div className="relative flex-1 w-full">
+                  <svg
+                    className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-3 text-left">
-                        <div
-                          className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-2xs ${mentee.avatarBg}`}
-                        >
-                          {getInitials(mentee.name)}
-                        </div>
-                        <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                          {mentee.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
-                      {mentee.email}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30">
-                        Mentee
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 dark:text-slate-200 font-medium">
-                      {assignedMentor ? (
-                        <span className="inline-flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
-                          <span className="w-2 h-2 rounded-full bg-blue-500" />
-                          <span>{assignedMentor.name}</span>
-                          {assignedMentor.status?.toLowerCase() === "inactive" && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-300 border border-amber-200/70 dark:border-amber-700/50">
-                              Inactive
-                            </span>
-                          )}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700">
-                          Not Assigned
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
-                      {mentee.joinedOn}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                          mentee.status?.toLowerCase() === "inactive"
-                            ? "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
-                            : "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
-                        }`}
-                      >
-                        {mentee.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                          (mentee.on_Board ?? mentee.on_board ?? mentee.onBoard)
-                            ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
-                            : "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30"
-                        }`}
-                      >
-                        {(mentee.on_Board ?? mentee.on_board ?? mentee.onBoard) ? "Completed" : "Pending"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        {/* Assign / Change Mentor Button */}
-                        <button
-                          type="button"
-                          onClick={() => openAssignMentorModal(mentee)}
-                          className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg border border-indigo-200 dark:border-indigo-800/60 shadow-2xs transition-colors cursor-pointer"
-                          title={assignedMentor ? `Change Mentor (${assignedMentor.name})` : "Assign Mentor"}
-                          aria-label={assignedMentor ? "Change Mentor" : "Assign Mentor"}
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                          </svg>
-                        </button>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search mentees by name or email..."
+                    value={menteeSearch}
+                    onChange={(e) => setMenteeSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
 
-                        {/* Edit Button */}
-                        <button
-                          onClick={() => setEditingUser({ ...mentee })}
-                          title="Edit User"
-                          aria-label="Edit User"
-                          className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg border border-slate-300 dark:border-slate-700 shadow-2xs transition-colors cursor-pointer"
-                        >
-                          <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                          </svg>
-                        </button>
-
-                        {/* Delete Button */}
-                        <button
-                          onClick={() => handleDelete(mentee.id, mentee.name)}
-                          title="Delete User"
-                          aria-label="Delete User"
-                          className="p-1.5 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900/60 shadow-2xs transition-colors cursor-pointer"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  );
-                })}
-
-                {filteredMentees.length === 0 && (
-                  <tr>
-                    <td colSpan="8" className="px-6 py-8 text-center text-slate-400 dark:text-slate-400 text-sm">
-                      No mentees found matching your search.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
-    )}
-
-    {/* ========================================================
-        TAB 4: ALL TASKS & DETAILS DIRECTORY PAGE
-        ======================================================== */}
-    {activeTab === "tasks" && (
-      <div>
-        {/* Page Title & Controls */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-              All Tasks Directory
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Oversee all assignments, mentor files, mentee deliverables, time logs, and reviews.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={loadAllTasks}
-              disabled={tasksLoading}
-              className="px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              <svg className={`w-4 h-4 text-blue-600 dark:text-blue-400 ${tasksLoading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span>Refresh Tasks</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Quick Filter Metrics Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-          <div
-            onClick={() => setTaskStatusFilter("All")}
-            className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-              taskStatusFilter === "All"
-                ? "bg-blue-50/80 dark:bg-blue-900/30 border-blue-500/50 shadow-xs"
-                : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
-            }`}
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">All Tasks</p>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white mt-1">{taskStats.total}</h3>
-          </div>
-
-          <div
-            onClick={() => setTaskStatusFilter(taskStatusFilter === "in-progress" ? "All" : "in-progress")}
-            className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-              taskStatusFilter === "in-progress"
-                ? "bg-blue-50/80 dark:bg-blue-900/30 border-blue-500/50 shadow-xs"
-                : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-blue-500" />
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">In Progress</p>
-            </div>
-            <h3 className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">{taskStats.inProgress}</h3>
-          </div>
-
-          <div
-            onClick={() => setTaskStatusFilter(taskStatusFilter === "submitted" ? "All" : "submitted")}
-            className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-              taskStatusFilter === "submitted"
-                ? "bg-amber-50/80 dark:bg-amber-900/30 border-amber-500/50 shadow-xs"
-                : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-500" />
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Submitted</p>
-            </div>
-            <h3 className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">{taskStats.submitted}</h3>
-          </div>
-
-          <div
-            onClick={() => setTaskStatusFilter(taskStatusFilter === "needs-revision" ? "All" : "needs-revision")}
-            className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-              taskStatusFilter === "needs-revision"
-                ? "bg-purple-50/80 dark:bg-purple-900/30 border-purple-500/50 shadow-xs"
-                : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-purple-500" />
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Revision</p>
-            </div>
-            <h3 className="text-xl font-bold text-purple-600 dark:text-purple-400 mt-1">{taskStats.needsRevision}</h3>
-          </div>
-
-          <div
-            onClick={() => setTaskStatusFilter(taskStatusFilter === "complete" ? "All" : "complete")}
-            className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-              taskStatusFilter === "complete"
-                ? "bg-emerald-50/80 dark:bg-emerald-900/30 border-emerald-500/50 shadow-xs"
-                : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Completed</p>
-            </div>
-            <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{taskStats.complete}</h3>
-          </div>
-
-          <div
-            onClick={() => setTaskStatusFilter(taskStatusFilter === "blocker" ? "All" : "blocker")}
-            className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-              taskStatusFilter === "blocker"
-                ? "bg-rose-50/80 dark:bg-rose-900/30 border-rose-500/50 shadow-xs"
-                : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-rose-500" />
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Blockers</p>
-            </div>
-            <h3 className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-1">{taskStats.blocker}</h3>
-          </div>
-        </div>
-
-        {/* Filter Toolbar */}
-        <section className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-xs border border-slate-200/80 dark:border-slate-700/80 mb-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            {/* Search Input */}
-            <div className="relative flex-1 min-w-[240px]">
-              <svg className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search tasks by title, mentee, mentor, or category..."
-                value={taskSearch}
-                onChange={(e) => setTaskSearch(e.target.value)}
-                className="w-full pl-10 pr-9 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-slate-50/50 dark:bg-slate-900/50 text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-              />
-              {taskSearch && (
-                <button
-                  onClick={() => setTaskSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer"
-                >
-                  &times;
-                </button>
-              )}
-            </div>
-
-            {/* Dropdown Filters */}
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                <span>Status:</span>
-                <select
-                  value={taskStatusFilter}
-                  onChange={(e) => setTaskStatusFilter(e.target.value)}
-                  className="px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
-                >
-                  <option value="All">All Statuses</option>
-                  <option value="in-progress">In Progress</option>
-                  <option value="submitted">Submitted</option>
-                  <option value="needs-revision">Needs Revision</option>
-                  <option value="complete">Completed</option>
-                  <option value="blocker">Blocker</option>
-                  <option value="hold">On Hold</option>
-                </select>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <select
+                    value={menteeFilter}
+                    onChange={(e) => setMenteeFilter(e.target.value)}
+                    className="w-28 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                  >
+                    <option value="All">All</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                <span>Priority:</span>
-                <select
-                  value={taskPriorityFilter}
-                  onChange={(e) => setTaskPriorityFilter(e.target.value)}
-                  className="px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
-                >
-                  <option value="All">All Priorities</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                <span>Category:</span>
-                <select
-                  value={taskCategoryFilter}
-                  onChange={(e) => setTaskCategoryFilter(e.target.value)}
-                  className="px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
-                >
-                  <option value="All">All Categories</option>
-                  <option value="upskill">Upskill</option>
-                  <option value="research">Research</option>
-                  <option value="client-project">Client Project</option>
-                  <option value="inhouse-project">Inhouse Project</option>
-                </select>
-              </div>
-
-              {(taskSearch || taskStatusFilter !== "All" || taskPriorityFilter !== "All" || taskCategoryFilter !== "All") && (
-                <button
-                  onClick={() => {
-                    setTaskSearch("");
-                    setTaskStatusFilter("All");
-                    setTaskPriorityFilter("All");
-                    setTaskCategoryFilter("All");
-                  }}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer ml-1 font-medium"
-                >
-                  Reset
-                </button>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* Tasks Table */}
-        <section className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200/80 dark:border-slate-700/80 overflow-hidden mb-8">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[900px]">
-              <thead>
-                <tr className="border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
-                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Task Title & Category
-                  </th>
-                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Mentee
-                  </th>
-                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Assigned By
-                  </th>
-                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Due Date
-                  </th>
-                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Logged Time
-                  </th>
-                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Files / Links
-                  </th>
-                  <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                {filteredTasks.map((task) => {
-                  const statusInfo = getStatusBadge(task.status);
-                  const isOverdue =
-                    task.status !== "complete" &&
-                    task.due_date &&
-                    new Date(task.due_date) < new Date();
-                  const attachmentCount = Array.isArray(task.attachments) ? task.attachments.length : 0;
-                  const hasSubmissionDeliverable = Boolean(task.submission_url || task.demo_url || task.submission_notes);
-                  const actualHours = (Number(task.actual_seconds || 0) / 3600).toFixed(1);
-
-                  return (
-                    <tr
-                      key={task.id}
-                      className="hover:bg-slate-50/70 dark:hover:bg-slate-700/30 transition-colors"
-                    >
-                      {/* Title & Category & Priority */}
-                      <td className="py-3 px-5">
-                        <div className="flex items-start gap-2">
-                          <div>
-                            <span className="font-semibold text-sm text-slate-900 dark:text-white block hover:text-blue-600 cursor-pointer" onClick={() => setSelectedTaskDetails(task)}>
-                              {task.title}
-                            </span>
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <span className="text-[10px] font-medium uppercase px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                                {task.category || "upskill"}
-                              </span>
-                              <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded border ${getPriorityBadge(task.priority)}`}>
-                                {task.priority || "medium"}
+              {/* Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/70 dark:bg-slate-900/60 border-y border-slate-200/80 dark:border-slate-700/80">
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        Role
+                      </th>
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        Assigned Mentor
+                      </th>
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        Joined On
+                      </th>
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        On Board
+                      </th>
+                      <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700/80">
+                    {filteredMentees.map((mentee) => {
+                      const assignedMentor = resolveMenteeMentor(mentee);
+                      return (
+                        <tr
+                          key={mentee.id}
+                          className="hover:bg-slate-50/60 dark:hover:bg-slate-700/40 transition-colors"
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-3 text-left">
+                              <div
+                                className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-2xs ${mentee.avatarBg}`}
+                              >
+                                {getInitials(mentee.name)}
+                              </div>
+                              <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                                {mentee.name}
                               </span>
                             </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Mentee */}
-                      <td className="py-3 px-5">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs flex-shrink-0">
-                            {getInitials(task.mentee?.name || "Mentee")}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
-                              {task.mentee?.name || `Mentee #${task.mentee_id}`}
-                            </p>
-                            <p className="text-[11px] text-slate-400 truncate">
-                              {task.mentee?.email || "—"}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Assigner / Mentor */}
-                      <td className="py-3 px-5 text-xs text-slate-700 dark:text-slate-300">
-                        {task.assigner?.name || `Mentor #${task.assigned_by}`}
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3 px-5">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${statusInfo.bg}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`} />
-                          <span>{statusInfo.label}</span>
-                        </span>
-                      </td>
-
-                      {/* Due Date */}
-                      <td className="py-3 px-5 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                        <div>
-                          <span>{formatDate(task.due_date)}</span>
-                          {isOverdue && (
-                            <span className="block text-[10px] font-bold text-rose-500 dark:text-rose-400 mt-0.5">
-                              Overdue
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
+                            {mentee.email}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30">
+                              Mentee
                             </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Time Logged */}
-                      <td className="py-3 px-5 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                        <div className="font-semibold text-slate-800 dark:text-slate-200">
-                          {actualHours}h {task.estimated_hours ? `/ ${task.estimated_hours}h` : ""}
-                        </div>
-                        {task.estimated_hours ? (
-                          <div className="w-20 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${
-                                Number(actualHours) > task.estimated_hours ? "bg-rose-500" : "bg-blue-500"
-                              }`}
-                              style={{
-                                width: `${Math.min(100, Math.round((Number(actualHours) / task.estimated_hours) * 100))}%`,
-                              }}
-                            />
-                          </div>
-                        ) : null}
-                      </td>
-
-                      {/* Attachments / Deliverables */}
-                      <td className="py-3 px-5">
-                        <div className="flex items-center gap-1.5">
-                          {attachmentCount > 0 ? (
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 dark:text-slate-200 font-medium">
+                            {assignedMentor ? (
+                              <span className="inline-flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
+                                <span className="w-2 h-2 rounded-full bg-blue-500" />
+                                <span>{assignedMentor.name}</span>
+                                {assignedMentor.status?.toLowerCase() === "inactive" && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-300 border border-amber-200/70 dark:border-amber-700/50">
+                                    Inactive
+                                  </span>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700">
+                                Not Assigned
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
+                            {mentee.joinedOn}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
                             <span
-                              title={`${attachmentCount} file${attachmentCount > 1 ? "s" : ""} attached by mentor`}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/50"
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${mentee.status?.toLowerCase() === "inactive"
+                                  ? "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-200/60 dark:border-rose-500/30"
+                                  : "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
+                                }`}
                             >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                              </svg>
-                              <span>{attachmentCount}</span>
+                              {mentee.status}
                             </span>
-                          ) : null}
-
-                          {hasSubmissionDeliverable ? (
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
                             <span
-                              title="Mentee has submitted deliverables"
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/50"
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${(mentee.on_Board ?? mentee.on_board ?? mentee.onBoard)
+                                  ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/30"
+                                  : "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-200/60 dark:border-amber-500/30"
+                                }`}
                             >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                              </svg>
-                              <span>Sub</span>
+                              {(mentee.on_Board ?? mentee.on_board ?? mentee.onBoard) ? "Completed" : "Pending"}
                             </span>
-                          ) : null}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              {/* Assign / Change Mentor Button */}
+                              <button
+                                type="button"
+                                onClick={() => openAssignMentorModal(mentee)}
+                                className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg border border-indigo-200 dark:border-indigo-800/60 shadow-2xs transition-colors cursor-pointer"
+                                title={assignedMentor ? `Change Mentor (${assignedMentor.name})` : "Assign Mentor"}
+                                aria-label={assignedMentor ? "Change Mentor" : "Assign Mentor"}
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                                </svg>
+                              </button>
 
-                          {!attachmentCount && !hasSubmissionDeliverable && (
-                            <span className="text-slate-400 text-xs">—</span>
-                          )}
-                        </div>
-                      </td>
+                              {/* Edit Button */}
+                              <button
+                                onClick={() => setEditingUser({ ...mentee })}
+                                title="Edit User"
+                                aria-label="Edit User"
+                                className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg border border-slate-300 dark:border-slate-700 shadow-2xs transition-colors cursor-pointer"
+                              >
+                                <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                              </button>
 
-                      {/* Actions */}
-                      <td className="py-3 px-5 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => setSelectedTaskDetails(task)}
-                            className="px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800/50 transition-colors cursor-pointer flex items-center gap-1"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                            <span>Details</span>
-                          </button>
+                              {/* Delete Button */}
+                              <button
+                                onClick={() => handleDelete(mentee.id, mentee.name)}
+                                title="Delete User"
+                                aria-label="Delete User"
+                                className="p-1.5 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900/60 shadow-2xs transition-colors cursor-pointer"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
 
-                          <button
-                            onClick={() => setTaskToDelete(task)}
-                            title="Delete Task"
-                            aria-label="Delete Task"
-                            className="p-1.5 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900/60 shadow-2xs transition-colors cursor-pointer"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {filteredTasks.length === 0 && (
-                  <tr>
-                    <td colSpan="8" className="px-6 py-12 text-center">
-                      <div className="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
-                        <svg className="w-12 h-12 mb-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                        <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">No tasks found</p>
-                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                          {taskSearch || taskStatusFilter !== "All"
-                            ? "Try adjusting your search queries or active filters."
-                            : "No tasks have been assigned by mentors yet."}
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                    {filteredMentees.length === 0 && (
+                      <tr>
+                        <td colSpan="8" className="px-6 py-8 text-center text-slate-400 dark:text-slate-400 text-sm">
+                          No mentees found matching your search.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </div>
-        </section>
-      </div>
-    )}
-  </main>
+        )}
+
+        {/* ========================================================
+        TAB 4: ALL TASKS & DETAILS DIRECTORY PAGE
+        ======================================================== */}
+        {activeTab === "tasks" && (
+          <div>
+            {/* Page Title & Controls */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+                  All Tasks Directory
+                </h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Oversee all assignments, mentor files, mentee deliverables, time logs, and reviews.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={loadAllTasks}
+                  disabled={tasksLoading}
+                  className="px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <svg className={`w-4 h-4 text-blue-600 dark:text-blue-400 ${tasksLoading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Refresh Tasks</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Filter Metrics Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+              <div
+                onClick={() => setTaskStatusFilter("All")}
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer ${taskStatusFilter === "All"
+                    ? "bg-blue-50/80 dark:bg-blue-900/30 border-blue-500/50 shadow-xs"
+                    : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
+                  }`}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">All Tasks</p>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mt-1">{taskStats.total}</h3>
+              </div>
+
+              <div
+                onClick={() => setTaskStatusFilter(taskStatusFilter === "in-progress" ? "All" : "in-progress")}
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer ${taskStatusFilter === "in-progress"
+                    ? "bg-blue-50/80 dark:bg-blue-900/30 border-blue-500/50 shadow-xs"
+                    : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
+                  }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">In Progress</p>
+                </div>
+                <h3 className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">{taskStats.inProgress}</h3>
+              </div>
+
+              <div
+                onClick={() => setTaskStatusFilter(taskStatusFilter === "submitted" ? "All" : "submitted")}
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer ${taskStatusFilter === "submitted"
+                    ? "bg-amber-50/80 dark:bg-amber-900/30 border-amber-500/50 shadow-xs"
+                    : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
+                  }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Submitted</p>
+                </div>
+                <h3 className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">{taskStats.submitted}</h3>
+              </div>
+
+              <div
+                onClick={() => setTaskStatusFilter(taskStatusFilter === "needs-revision" ? "All" : "needs-revision")}
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer ${taskStatusFilter === "needs-revision"
+                    ? "bg-purple-50/80 dark:bg-purple-900/30 border-purple-500/50 shadow-xs"
+                    : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
+                  }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-purple-500" />
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Revision</p>
+                </div>
+                <h3 className="text-xl font-bold text-purple-600 dark:text-purple-400 mt-1">{taskStats.needsRevision}</h3>
+              </div>
+
+              <div
+                onClick={() => setTaskStatusFilter(taskStatusFilter === "complete" ? "All" : "complete")}
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer ${taskStatusFilter === "complete"
+                    ? "bg-emerald-50/80 dark:bg-emerald-900/30 border-emerald-500/50 shadow-xs"
+                    : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
+                  }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Completed</p>
+                </div>
+                <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{taskStats.complete}</h3>
+              </div>
+
+              <div
+                onClick={() => setTaskStatusFilter(taskStatusFilter === "blocker" ? "All" : "blocker")}
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer ${taskStatusFilter === "blocker"
+                    ? "bg-rose-50/80 dark:bg-rose-900/30 border-rose-500/50 shadow-xs"
+                    : "bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700/80 hover:border-slate-300"
+                  }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-rose-500" />
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Blockers</p>
+                </div>
+                <h3 className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-1">{taskStats.blocker}</h3>
+              </div>
+            </div>
+
+            {/* Filter Toolbar */}
+            <section className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-xs border border-slate-200/80 dark:border-slate-700/80 mb-6">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                {/* Search Input */}
+                <div className="relative flex-1 min-w-[240px]">
+                  <svg className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search tasks by title, mentee, mentor, or category..."
+                    value={taskSearch}
+                    onChange={(e) => setTaskSearch(e.target.value)}
+                    className="w-full pl-10 pr-9 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-slate-50/50 dark:bg-slate-900/50 text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                  {taskSearch && (
+                    <button
+                      onClick={() => setTaskSearch("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer"
+                    >
+                      &times;
+                    </button>
+                  )}
+                </div>
+
+                {/* Dropdown Filters */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                    <span>Status:</span>
+                    <select
+                      value={taskStatusFilter}
+                      onChange={(e) => setTaskStatusFilter(e.target.value)}
+                      className="px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                    >
+                      <option value="All">All Statuses</option>
+                      <option value="in-progress">In Progress</option>
+                      <option value="submitted">Submitted</option>
+                      <option value="needs-revision">Needs Revision</option>
+                      <option value="complete">Completed</option>
+                      <option value="blocker">Blocker</option>
+                      <option value="hold">On Hold</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                    <span>Priority:</span>
+                    <select
+                      value={taskPriorityFilter}
+                      onChange={(e) => setTaskPriorityFilter(e.target.value)}
+                      className="px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                    >
+                      <option value="All">All Priorities</option>
+                      <option value="high">High</option>
+                      <option value="medium">Medium</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                    <span>Category:</span>
+                    <select
+                      value={taskCategoryFilter}
+                      onChange={(e) => setTaskCategoryFilter(e.target.value)}
+                      className="px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                    >
+                      <option value="All">All Categories</option>
+                      <option value="upskill">Upskill</option>
+                      <option value="research">Research</option>
+                      <option value="client-project">Client Project</option>
+                      <option value="inhouse-project">Inhouse Project</option>
+                    </select>
+                  </div>
+
+                  {(taskSearch || taskStatusFilter !== "All" || taskPriorityFilter !== "All" || taskCategoryFilter !== "All") && (
+                    <button
+                      onClick={() => {
+                        setTaskSearch("");
+                        setTaskStatusFilter("All");
+                        setTaskPriorityFilter("All");
+                        setTaskCategoryFilter("All");
+                      }}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer ml-1 font-medium"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* Tasks Table */}
+            <section className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200/80 dark:border-slate-700/80 overflow-hidden mb-8">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[900px]">
+                  <thead>
+                    <tr className="border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+                      <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Task Title & Category
+                      </th>
+                      <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Mentee
+                      </th>
+                      <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Assigned By
+                      </th>
+                      <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Due Date
+                      </th>
+                      <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Logged Time
+                      </th>
+                      <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Files / Links
+                      </th>
+                      <th className="py-3.5 px-5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
+                    {filteredTasks.map((task) => {
+                      const statusInfo = getStatusBadge(task.status);
+                      const isOverdue =
+                        task.status !== "complete" &&
+                        task.due_date &&
+                        new Date(task.due_date) < new Date();
+                      const attachmentCount = Array.isArray(task.attachments) ? task.attachments.length : 0;
+                      const hasSubmissionDeliverable = Boolean(task.submission_url || task.demo_url || task.submission_notes);
+                      const actualHours = (Number(task.actual_seconds || 0) / 3600).toFixed(1);
+
+                      return (
+                        <tr
+                          key={task.id}
+                          className="hover:bg-slate-50/70 dark:hover:bg-slate-700/30 transition-colors"
+                        >
+                          {/* Title & Category & Priority */}
+                          <td className="py-3 px-5">
+                            <div className="flex items-start gap-2">
+                              <div>
+                                <span className="font-semibold text-sm text-slate-900 dark:text-white block hover:text-blue-600 cursor-pointer" onClick={() => setSelectedTaskDetails(task)}>
+                                  {task.title}
+                                </span>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <span className="text-[10px] font-medium uppercase px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                    {task.category || "upskill"}
+                                  </span>
+                                  <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded border ${getPriorityBadge(task.priority)}`}>
+                                    {task.priority || "medium"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Mentee */}
+                          <td className="py-3 px-5">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs flex-shrink-0">
+                                {getInitials(task.mentee?.name || "Mentee")}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                                  {task.mentee?.name || `Mentee #${task.mentee_id}`}
+                                </p>
+                                <p className="text-[11px] text-slate-400 truncate">
+                                  {task.mentee?.email || "—"}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Assigner / Mentor */}
+                          <td className="py-3 px-5 text-xs text-slate-700 dark:text-slate-300">
+                            {task.assigner?.name || `Mentor #${task.assigned_by}`}
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-3 px-5">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${statusInfo.bg}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`} />
+                              <span>{statusInfo.label}</span>
+                            </span>
+                          </td>
+
+                          {/* Due Date */}
+                          <td className="py-3 px-5 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                            <div>
+                              <span>{formatDate(task.due_date)}</span>
+                              {isOverdue && (
+                                <span className="block text-[10px] font-bold text-rose-500 dark:text-rose-400 mt-0.5">
+                                  Overdue
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Time Logged */}
+                          <td className="py-3 px-5 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                            <div className="font-semibold text-slate-800 dark:text-slate-200">
+                              {actualHours}h {task.estimated_hours ? `/ ${task.estimated_hours}h` : ""}
+                            </div>
+                            {task.estimated_hours ? (
+                              <div className="w-20 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full mt-1 overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${Number(actualHours) > task.estimated_hours ? "bg-rose-500" : "bg-blue-500"
+                                    }`}
+                                  style={{
+                                    width: `${Math.min(100, Math.round((Number(actualHours) / task.estimated_hours) * 100))}%`,
+                                  }}
+                                />
+                              </div>
+                            ) : null}
+                          </td>
+
+                          {/* Attachments / Deliverables */}
+                          <td className="py-3 px-5">
+                            <div className="flex items-center gap-1.5">
+                              {attachmentCount > 0 ? (
+                                <span
+                                  title={`${attachmentCount} file${attachmentCount > 1 ? "s" : ""} attached by mentor`}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/50"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                  </svg>
+                                  <span>{attachmentCount}</span>
+                                </span>
+                              ) : null}
+
+                              {hasSubmissionDeliverable ? (
+                                <span
+                                  title="Mentee has submitted deliverables"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/50"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                  <span>Sub</span>
+                                </span>
+                              ) : null}
+
+                              {!attachmentCount && !hasSubmissionDeliverable && (
+                                <span className="text-slate-400 text-xs">—</span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="py-3 px-5 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => setSelectedTaskDetails(task)}
+                                className="px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800/50 transition-colors cursor-pointer flex items-center gap-1"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                                <span>Details</span>
+                              </button>
+
+                              <button
+                                onClick={() => setTaskToDelete(task)}
+                                title="Delete Task"
+                                aria-label="Delete Task"
+                                className="p-1.5 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900/60 shadow-2xs transition-colors cursor-pointer"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {filteredTasks.length === 0 && (
+                      <tr>
+                        <td colSpan="8" className="px-6 py-12 text-center">
+                          <div className="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
+                            <svg className="w-12 h-12 mb-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">No tasks found</p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                              {taskSearch || taskStatusFilter !== "All"
+                                ? "Try adjusting your search queries or active filters."
+                                : "No tasks have been assigned by mentors yet."}
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        )}
+      </main>
 
       {/* CREATE MODAL */}
       {showCreateModal && (
@@ -2430,9 +2397,8 @@ function AdminDashboard() {
                         : "Select mentees to assign..."}
                     </span>
                     <svg
-                      className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
-                        menteeDropdownOpen ? "rotate-180" : ""
-                      }`}
+                      className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${menteeDropdownOpen ? "rotate-180" : ""
+                        }`}
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -2553,11 +2519,10 @@ function AdminDashboard() {
                                   </div>
                                 )}
                                 <label
-                                  className={`w-full px-3 py-2.5 flex items-center gap-3 cursor-pointer select-none transition-colors ${
-                                    isSelected
+                                  className={`w-full px-3 py-2.5 flex items-center gap-3 cursor-pointer select-none transition-colors ${isSelected
                                       ? "bg-blue-50/70 dark:bg-blue-900/20"
                                       : "hover:bg-slate-50 dark:hover:bg-slate-800/60"
-                                  }`}
+                                    }`}
                                 >
                                   <input
                                     type="checkbox"
@@ -2571,11 +2536,10 @@ function AdminDashboard() {
                                         {m.name}
                                       </p>
                                       <span
-                                        className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                                          m.mentor
+                                        className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${m.mentor
                                             ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
                                             : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                                        }`}
+                                          }`}
                                       >
                                         {m.mentor ? `Mentor: ${m.mentor}` : "Unassigned"}
                                       </span>
@@ -3028,11 +2992,10 @@ function AdminDashboard() {
                   {selectedTaskDetails.estimated_hours ? (
                     <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden mt-1">
                       <div
-                        className={`h-full rounded-full ${
-                          (Number(selectedTaskDetails.actual_seconds || 0) / 3600) > selectedTaskDetails.estimated_hours
+                        className={`h-full rounded-full ${(Number(selectedTaskDetails.actual_seconds || 0) / 3600) > selectedTaskDetails.estimated_hours
                             ? "bg-rose-500"
                             : "bg-blue-600"
-                        }`}
+                          }`}
                         style={{
                           width: `${Math.min(100, Math.round(((Number(selectedTaskDetails.actual_seconds || 0) / 3600) / selectedTaskDetails.estimated_hours) * 100))}%`,
                         }}
@@ -3240,14 +3203,7 @@ function AdminDashboard() {
           onConfirm={confirmDeleteTask}
         />
       )}
-      <ChangePasswordModal
-          isOpen={showChangePassword}
-          onClose={() => setShowChangePassword(false)}
-          onSuccess={(message) => {
-            setNotification({ type: "success", message });
-            setTimeout(() => setNotification(null), 3000);
-          }}
-        />
+
     </div>
   );
 }
