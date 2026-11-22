@@ -5,7 +5,8 @@ import useAuth from "../../hooks/useAuth";
 import useUsers from "../../hooks/useUsers";
 import taskApi from "../../api/taskApi";
 import ConfirmModal from "../../components/common/ConfirmModal";
-import ChangePasswordModal from "../../components/common/ChangePasswordModal"
+//import ChangePasswordModal from "../../components/common/ChangePasswordModal"
+import HierarchyTree from "../../components/Hierarchy/HierarchyTree";
 
 // Helper to get 2-letter initials
 function getInitials(name = "") {
@@ -36,7 +37,7 @@ function AdminDashboard() {
 
   const tabFromUrl = searchParams.get("tab");
   const [activeTab, setActiveTabState] = useState(() => {
-    return ["dashboard", "mentors", "mentees", "tasks"].includes(tabFromUrl)
+    return ["dashboard", "mentors", "mentees", "tasks","hierarchy"].includes(tabFromUrl)
       ? tabFromUrl
       : "dashboard";
   });
@@ -49,7 +50,7 @@ function AdminDashboard() {
 
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (tab && ["dashboard", "mentors", "mentees", "tasks"].includes(tab)) {
+    if (tab && ["dashboard", "mentors", "mentees", "tasks","hierarchy"].includes(tab)) {
       setActiveTabState(tab);
     } else if (!tab) {
       setActiveTabState("dashboard");
@@ -715,7 +716,19 @@ function AdminDashboard() {
                 {allTasks.length}
               </span>
             </button>
-
+            <button
+              onClick={() => setActiveTab("hierarchy")}
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === "hierarchy"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+              }`}
+            >
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 5a2 2 0 100 4 2 2 0 000-4zm0 4v3m0 0H6m6 0h6M6 12v3m12-3v3M6 17a2 2 0 100 4 2 2 0 000-4zm12 0a2 2 0 100 4 2 2 0 000-4z" />
+              </svg>
+              <span>Hierarchy</span>
+            </button>
             <button
               type="button"
               onClick={() => navigate("/chat")}
@@ -760,7 +773,9 @@ function AdminDashboard() {
                   ? "Mentees Management"
                   : activeTab === "tasks"
                     ? "All Tasks & Assignments"
-                    : "Admin Portal"}
+                    : activeTab === "hierarchy"
+                      ? "Team Hierarchy"
+                      : "Admin Portal"}
             </span>
           </div>
 
@@ -2276,6 +2291,26 @@ function AdminDashboard() {
             </section>
           </div>
         )}
+        {/* TAB 5: TEAM HIERARCHY */}
+        {activeTab === "hierarchy" && (
+          <div>
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+                Team Hierarchy
+              </h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                See which mentors report to the admin and which mentees are under each mentor.
+              </p>
+            </div>
+
+            <HierarchyTree
+              admin={currentUser}
+              mentors={mentors}
+              mentees={mentees}
+              resolveMenteeMentor={resolveMenteeMentor}
+            />
+          </div>
+        )}
       </main>
 
       {/* CREATE MODAL */}
@@ -2340,11 +2375,6 @@ function AdminDashboard() {
                   className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
-
-              <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/60 rounded-lg text-xs text-blue-700 dark:text-blue-300">
-                A temporary password is generated automatically and emailed to the user upon creation.
-              </div>
-
               {createRole === "mentee" && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">

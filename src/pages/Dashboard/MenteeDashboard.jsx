@@ -37,7 +37,15 @@ function getInitials(name = "") {
   }
   return normalized.slice(0, 2).toUpperCase();
 }
-
+function AssignedBy({ name }) {
+  if (!name) return null;
+  return (
+    <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+      Assigned by{" "}
+      <span className="font-semibold text-slate-700 dark:text-slate-200">{name}</span>
+    </p>
+  );
+}
 const MENTEE_STATUS_OPTIONS = [
   { value: "in-progress", label: "In Progress" },
   { value: "hold", label: "On Hold" },
@@ -476,17 +484,6 @@ const MenteeDashboard = () => {
     });
   };
 
-
-  //  const handleOpenTaskFromNotification = (taskId, notificationItem) => {
-  //   setActiveTab("assignments");
-  //   setTaskFilter("All");
-  //   mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-
-  //   const conversationId = notificationItem?.data?.conversationId;
-  //   if (String(notificationItem?.type || "").startsWith("BLOCKER_") && conversationId) {
-  //     handleOpenConversationById(conversationId);
-  //   }
-  // };
 
     const handleOpenTaskFromNotification = (taskId, notificationItem) => {
     highlightTask(taskId || notificationItem?.data?.taskId);
@@ -1075,21 +1072,6 @@ const MenteeDashboard = () => {
               </h2>
             </div>
           </div>
-
-          {/* Attendance */}
-          {/* <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Attendance</p>
-              <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-0.5">{menteeUser.attendance || "100%"}</h2>
-            </div>
-          </div> */}
-
-
         </div>
 
         {/* TAB 1: OVERVIEW */}
@@ -1152,7 +1134,13 @@ const MenteeDashboard = () => {
                     <>
                       <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                         {focusTask.title}
-                      </h3>
+                     </h3>
+                        <AssignedBy
+                          name={
+                            focusTask.assigner?.name ||
+                            (menteeUser.mentor !== "Unassigned" ? menteeUser.mentor : "")
+                          }
+                        />
                       {focusTask.description?.trim() ? (
                         <p className="text-slate-600 dark:text-slate-300 text-xs mt-2 leading-relaxed whitespace-pre-line">
                           {focusTask.description}
@@ -1532,6 +1520,12 @@ const MenteeDashboard = () => {
                     </div>
 
                     <h3 className="font-bold text-slate-900 dark:text-white text-sm mt-3">{task.title}</h3>
+                    <AssignedBy
+                        name={
+                          task.assigner?.name ||
+                          (menteeUser.mentor !== "Unassigned" ? menteeUser.mentor : "")
+                        }
+                      />
                     {task.description?.trim() ? (
                       <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 line-clamp-2 leading-relaxed">
                         {task.description}

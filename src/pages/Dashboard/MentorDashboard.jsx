@@ -1358,7 +1358,7 @@ const MentorDashboard = () => {
             </div>
 
             {/* Tasks Table */}
-            <div className="overflow-x-auto">
+            <div className="w-full">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50/70 dark:bg-slate-900/60 border-b border-slate-200/80 dark:border-slate-700/80 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
@@ -1409,7 +1409,7 @@ const MentorDashboard = () => {
                           )}
                         </td>
 
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4 ">
                           <span className="font-semibold text-slate-800 dark:text-slate-100">{task.mentee?.name || "Mentee"}</span>
                           <span className="block text-[11px] text-slate-400 dark:text-slate-400">{task.mentee?.email || ""}</span>
                         </td>
@@ -1456,7 +1456,7 @@ const MentorDashboard = () => {
                         </td>
 
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <div className="inline-flex items-center gap-2 justify-end">
+                          <div className="flex flex-wrap items-center gap-2 justify-end">
                             {task.status === "submitted" || (task.status === "needs-revision" && task.submission_url) ? (
                               <button
                                 onClick={() => openEvaluationModal(task)}

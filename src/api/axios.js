@@ -300,4 +300,9 @@ export const getAccessToken = () => {
   return sessionStorage.getItem('token');
 };
 
+export const fetchHierarchy = async () => {
+  const { data } = await apiClient.get('/users/hierarchy');
+  return data;
+};
+
 export default apiClient;
