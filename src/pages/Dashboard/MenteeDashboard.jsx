@@ -8,7 +8,9 @@ import useTasks from "../../hooks/useTasks";
 import {
   submitTaskVersion,
   getTaskSubmissionHistory,
+  downloadSubmissionAttachmentApi,
 } from "../../api/taskSubmissionApi";
+import taskApi from "../../api/taskApi";
 import { useActiveTimer } from "../../hooks/useActiveTimer";
 import { startTaskTimer, stopTaskTimer, TIMER_CHANGED_EVENT } from "../../api/timeLog";
 import TaskTimer from "../../components/TaskTimer";
@@ -98,8 +100,16 @@ function TaskAttachments({ task, compact = false }) {
   const attachments = Array.isArray(task?.attachments) ? task.attachments : [];
   if (attachments.length === 0) return null;
 
-  const getUrl = (att, i) =>
-    att.url || att.download_url || `/api/tasks/${task.id}/attachments/${att.id ?? i}`;
+  const handleDownload = async (e, att, i) => {
+    e.preventDefault();
+    try {
+      const attId = att.id ?? i;
+      await taskApi.downloadAttachment(task.id, attId, att.name || `attachment-${i + 1}`);
+    } catch (err) {
+      console.error("Failed to download attachment:", err);
+      if (att.url) window.open(att.url, "_blank");
+    }
+  };
 
   return (
     <div className={compact ? "mt-2" : "mt-3"}>
@@ -109,18 +119,16 @@ function TaskAttachments({ task, compact = false }) {
       <ul className="space-y-1">
         {attachments.map((att, i) => (
           <li key={att.id ?? `${att.name}-${i}`}>
-            <a
-              href={getUrl(att, i)}
-              target="_blank"
-              rel="noreferrer"
-              download={att.name}
-              className="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 rounded-lg text-xs text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-slate-700 transition-colors"
+            <button
+              type="button"
+              onClick={(e) => handleDownload(e, att, i)}
+              className="w-full flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700 rounded-lg text-xs text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-slate-700 transition-colors text-left cursor-pointer"
             >
               <span className="truncate font-medium">📎 {att.name || `Attachment ${i + 1}`}</span>
               <span className="flex-shrink-0 text-[11px] text-slate-400">
                 {formatFileSize(att.size)} ↓
               </span>
-            </a>
+            </button>
           </li>
         ))}
       </ul>
@@ -1434,17 +1442,23 @@ const MenteeDashboard = () => {
                                   {attachUrl && (
                                     <div className="flex items-center gap-1.5 min-w-0">
                                       <span className="font-semibold text-slate-500 shrink-0">Attachment:</span>
-                                      <a
-                                        href={attachUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-1 font-medium truncate"
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          try {
+                                            await downloadSubmissionAttachmentApi(submission.id, `submission-v${submission.version || 1}-attachment`);
+                                          } catch (err) {
+                                            console.error("Failed to download attachment:", err);
+                                            window.open(attachUrl, "_blank");
+                                          }
+                                        }}
+                                        className="text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-1 font-medium truncate cursor-pointer bg-transparent border-none p-0 text-left"
                                       >
                                         <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                                           <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                                         </svg>
-                                        <span>Download / View Attachment</span>
-                                      </a>
+                                        <span>Download Attachment</span>
+                                      </button>
                                     </div>
                                   )}
                                 </div>
@@ -1865,16 +1879,21 @@ const MenteeDashboard = () => {
                         </p>
                         <div className="flex flex-wrap gap-1">
                           {submittingTask.attachments.map((att, i) => (
-                            <a
+                            <button
                               key={att.id ?? i}
-                              href={att.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              download={att.name}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 text-[10px] font-medium border border-slate-200 dark:border-slate-700 hover:underline"
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await taskApi.downloadAttachment(submittingTask.id, att.id ?? i, att.name || `brief-${i + 1}`);
+                                } catch (err) {
+                                  console.error("Failed to download brief attachment:", err);
+                                  if (att.url) window.open(att.url, "_blank");
+                                }
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 text-[10px] font-medium border border-slate-200 dark:border-slate-700 hover:underline cursor-pointer"
                             >
                               📎 {att.name}
-                            </a>
+                            </button>
                           ))}
                         </div>
                       </div>

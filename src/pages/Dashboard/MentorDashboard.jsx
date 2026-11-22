@@ -11,7 +11,9 @@ import {
   approveSubmissionApi,
   requestChangesApi,
   getTaskSubmissionHistory,
+  downloadSubmissionAttachmentApi,
 } from "../../api/taskSubmissionApi";
+import taskApi from "../../api/taskApi";
 import { formatHours } from "../../utils/formatDuration";
 
 import SubmissionStatus from "../../components/taskSubmission/SubmissionStatus";
@@ -1393,17 +1395,22 @@ const MentorDashboard = () => {
                           {Array.isArray(task.attachments) && task.attachments.length > 0 && (
                             <div className="mt-1.5 flex flex-wrap gap-1.5">
                               {task.attachments.map((att, i) => (
-                                <a
+                                <button
                                   key={att.id ?? `${att.name}-${i}`}
-                                  href={att.url || att.download_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  download={att.name}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 text-[11px] font-medium hover:underline"
+                                  type="button"
+                                  onClick={async () => {
+                                    try {
+                                      await taskApi.downloadAttachment(task.id, att.id ?? i, att.name || `attachment-${i + 1}`);
+                                    } catch (err) {
+                                      console.error("Failed to download attachment:", err);
+                                      if (att.url) window.open(att.url, "_blank");
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 text-[11px] font-medium hover:underline cursor-pointer border-none"
                                   title={`Download ${att.name || 'Attachment'}`}
                                 >
                                   📎 {att.name || `Attachment ${i + 1}`}
-                                </a>
+                                </button>
                               ))}
                             </div>
                           )}
@@ -1564,17 +1571,23 @@ const MentorDashboard = () => {
                                         {attachUrl && (
                                           <div className="flex items-center gap-1.5 min-w-0">
                                             <span className="font-semibold text-slate-500 shrink-0">Attachment:</span>
-                                            <a
-                                              href={attachUrl}
-                                              target="_blank"
-                                              rel="noreferrer"
-                                              className="text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-1 font-medium truncate"
+                                            <button
+                                              type="button"
+                                              onClick={async () => {
+                                                try {
+                                                  await downloadSubmissionAttachmentApi(submission.id, `submission-v${submission.version || 1}-attachment`);
+                                                } catch (err) {
+                                                  console.error("Failed to download submission attachment:", err);
+                                                  window.open(attachUrl, "_blank");
+                                                }
+                                              }}
+                                              className="text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-1 font-medium truncate cursor-pointer bg-transparent border-none p-0 text-left"
                                             >
                                               <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                                               </svg>
-                                              <span>View / Download Attachment</span>
-                                            </a>
+                                              <span>Download Attachment</span>
+                                            </button>
                                           </div>
                                         )}
                                       </div>
@@ -2124,17 +2137,28 @@ const MentorDashboard = () => {
                     <div className="flex items-start gap-2">
                       <span className="font-semibold text-slate-500 dark:text-slate-400 min-w-[110px] shrink-0">Attachment:</span>
                       {getAttachmentUrl(selectedSubmission, evaluatingTask) ? (
-                        <a
-                          href={getAttachmentUrl(selectedSubmission, evaluatingTask)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-violet-600 dark:text-violet-400 hover:underline font-medium flex items-center gap-1.5 bg-violet-50 dark:bg-violet-950/40 px-2.5 py-1 rounded-md border border-violet-200 dark:border-violet-800/60"
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const subId = selectedSubmission?.id || evaluatingTask?.submission_id;
+                            if (subId) {
+                              try {
+                                await downloadSubmissionAttachmentApi(subId, 'submission-deliverable');
+                                return;
+                              } catch (err) {
+                                console.error("Failed to download submission deliverable:", err);
+                              }
+                            }
+                            const rawUrl = getAttachmentUrl(selectedSubmission, evaluatingTask);
+                            if (rawUrl) window.open(rawUrl, "_blank");
+                          }}
+                          className="text-violet-600 dark:text-violet-400 hover:underline font-medium flex items-center gap-1.5 bg-violet-50 dark:bg-violet-950/40 px-2.5 py-1 rounded-md border border-violet-200 dark:border-violet-800/60 cursor-pointer text-left"
                         >
                           <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                           </svg>
                           <span>Download / View Attached Deliverable</span>
-                        </a>
+                        </button>
                       ) : (
                         <span className="text-slate-400 italic">No file attached</span>
                       )}

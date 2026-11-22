@@ -3056,12 +3056,18 @@ function AdminDashboard() {
                 {Array.isArray(selectedTaskDetails.attachments) && selectedTaskDetails.attachments.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {selectedTaskDetails.attachments.map((att, i) => (
-                      <a
+                      <button
                         key={att.id || i}
-                        href={att.url || "#"}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 flex items-center justify-between gap-2 text-xs transition-colors group shadow-2xs"
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await taskApi.downloadAttachment(selectedTaskDetails.id, att.id ?? i, att.name || "attachment");
+                          } catch (err) {
+                            console.error("Failed to download attachment:", err);
+                            if (att.url) window.open(att.url, "_blank");
+                          }
+                        }}
+                        className="p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 flex items-center justify-between gap-2 text-xs transition-colors group shadow-2xs text-left cursor-pointer w-full"
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
@@ -3077,9 +3083,9 @@ function AdminDashboard() {
                           </div>
                         </div>
                         <span className="text-blue-600 dark:text-blue-400 text-xs font-semibold group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
-                          Open &rarr;
+                          Download &rarr;
                         </span>
-                      </a>
+                      </button>
                     ))}
                   </div>
                 ) : (

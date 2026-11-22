@@ -94,6 +94,23 @@ export const taskApi = {
     const response = await apiClient.delete(`/tasks/${id}`);
     return response.data?.success;
   },
+
+  /**
+   * Download and decrypt task attachment
+   */
+  async downloadAttachment(taskId, attachmentId, fileName = 'attachment') {
+    const response = await apiClient.get(`/tasks/${taskId}/attachments/${attachmentId}/download`, {
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
 };
 
 export default taskApi;

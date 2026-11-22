@@ -6,65 +6,49 @@ const formatSize = (n) =>
 
 export default function AttachmentView({ att }) {
   const isImage = att.mimeType?.startsWith('image/');
-  const isCloudUrl = att.url?.startsWith('http://') || att.url?.startsWith('https://');
 
-  // If it's an ImageKit URL, load it directly without blob conversion
-  const [src, setSrc] = useState(isCloudUrl ? att.url : null);
+  const [src, setSrc] = useState(null);
+
+  const attachmentEndpoint = att.id ? `/chat/attachments/${att.id}` : att.url;
 
   useEffect(() => {
-    if (!isImage) return undefined;
+    if (!isImage || !attachmentEndpoint) return undefined;
 
-    // Direct ImageKit CDN URL
-    if (isCloudUrl) {
-      setSrc(att.url);
-      return undefined;
-    }
-
-    // Fallback for legacy relative URLs (/chat/attachments/:id)
     let objectUrl = null;
     let cancelled = false;
 
+    // Fetch decrypted blob through authenticated backend endpoint
     chatApi
-      .fetchAttachment(att.url)
+      .fetchAttachment(attachmentEndpoint)
       .then((blob) => {
         if (cancelled) return;
         objectUrl = URL.createObjectURL(blob);
         setSrc(objectUrl);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error('Failed to load image preview:', err);
+      });
 
     return () => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [att.url, isImage, isCloudUrl]);
+  }, [attachmentEndpoint, isImage]);
 
   const download = async () => {
     try {
-      if (isCloudUrl) {
-        // Fetch direct blob from ImageKit CDN
-        const res = await fetch(att.url);
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = att.originalName || 'file';
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        return;
-      }
-
-      // Legacy attachment endpoint
-      const blob = await chatApi.fetchAttachment(att.url);
+      if (!attachmentEndpoint) return;
+      const blob = await chatApi.fetchAttachment(attachmentEndpoint);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = att.originalName || 'file';
+      document.body.appendChild(a);
       a.click();
+      a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
       console.error('Failed to download attachment:', err);
-      // Fallback: open file in a new tab
       if (att.url) window.open(att.url, '_blank');
     }
   };
