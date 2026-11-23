@@ -97,7 +97,7 @@ const getDemoUrl = (submission, task) => {
   return submission?.demoUrl || submission?.demo_url || task?.demo_url || "";
 };
 
-const getAttachmentUrl = (submission, task) => {
+const getAttachmentUrl = (submission) => {
   if (submission?.attachmentUrl) {
     if (submission.attachmentUrl.includes("ik.imagekit.io") || submission?.submissionUrl) {
       return submission.attachmentUrl;
@@ -159,11 +159,15 @@ const MentorDashboard = () => {
   const navigate = useNavigate();
   const mainRef = useRef(null);
 
-  // Today's date string YYYY-MM-DD for date validation
-  const todayDateString = useMemo(() => {
+  // Today's date string YYYY-MM-DD and current datetime for date validation
+  const { todayDateString, currentDateTimeString } = useMemo(() => {
     const d = new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().split("T")[0];
+    const iso = d.toISOString();
+    return {
+      todayDateString: iso.split("T")[0],
+      currentDateTimeString: iso.slice(0, 16),
+    };
   }, []);
 
   // Current logged in mentor details from AuthContext
@@ -427,6 +431,39 @@ const MentorDashboard = () => {
 
   const [dateError, setDateError] = useState("");
 
+  // Validate start date and due date according to business rules:
+  // 1. Neither start date nor due date can be in the past.
+  // 2. Start date will always be strictly less than due date.
+  const validateTaskDates = (startDateStr, dueDateStr) => {
+    if (!startDateStr || !dueDateStr) {
+      setDateError("Please provide both start date and due date.");
+      return false;
+    }
+
+    if (startDateStr < todayDateString) {
+      setDateError("Start date cannot be in the past.");
+      return false;
+    }
+
+    const dueDateObj = new Date(dueDateStr);
+    const now = new Date();
+    if (dueDateObj < now) {
+      setDateError("Due date and time cannot be in the past.");
+      return false;
+    }
+
+    const startDateObj = new Date(
+      startDateStr.includes("T") ? startDateStr : `${startDateStr}T00:00:00`
+    );
+    if (startDateObj >= dueDateObj) {
+      setDateError("Start date must be less than due date.");
+      return false;
+    }
+
+    setDateError("");
+    return true;
+  };
+
   // Evaluation Form (matches backend PATCH /api/tasks/:id/evaluate fields)
   const [evaluation, setEvaluation] = useState({
     feedback: "",
@@ -590,18 +627,7 @@ const MentorDashboard = () => {
       return;
     }
 
-    if (!newTask.start_date || !newTask.due_date) {
-      setDateError("Please provide both start date and due date.");
-      return;
-    }
-
-    if (new Date(newTask.due_date) < new Date()) {
-      setDateError("Due date and time cannot be in the past.");
-      return;
-    }
-
-    if (newTask.due_date.slice(0, 10) < newTask.start_date) {
-      setDateError("Due date must be on or after the start date.");
+    if (!validateTaskDates(newTask.start_date, newTask.due_date)) {
       return;
     }
 
@@ -1929,17 +1955,18 @@ const MentorDashboard = () => {
                       <input
                         type="date"
                         required
+                        min={todayDateString}
                         value={newTask.start_date}
                         onChange={(e) => {
                           const selected = e.target.value;
                           setNewTask({ ...newTask, start_date: selected });
-                          if (selected && newTask.due_date && newTask.due_date.slice(0, 10) < selected) {
-                            setDateError("Due date must be on or after start date.");
-                          } else {
-                            setDateError("");
-                          }
+                          validateTaskDates(selected, newTask.due_date);
                         }}
-                        className="w-full px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                        className={`w-full px-2.5 py-1.5 border rounded-lg text-xs text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 cursor-pointer ${
+                          dateError
+                            ? "border-rose-400 focus:ring-rose-400/20"
+                            : "border-slate-200 dark:border-slate-700 focus:ring-indigo-500/20"
+                        }`}
                       />
                     </div>
 
@@ -1950,21 +1977,21 @@ const MentorDashboard = () => {
                       <input
                         type="datetime-local"
                         required
-                        min={`${newTask.start_date || todayDateString}T00:00`}
+                        min={
+                          newTask.start_date && newTask.start_date > todayDateString
+                            ? `${newTask.start_date}T00:00`
+                            : currentDateTimeString
+                        }
                         value={newTask.due_date}
                         onChange={(e) => {
                           const selected = e.target.value;
                           setNewTask({ ...newTask, due_date: selected });
-                          if (selected && new Date(selected) < new Date()) {
-                            setDateError("Due date cannot be in the past!");
-                          } else if (selected && newTask.start_date && selected.slice(0, 10) < newTask.start_date) {
-                            setDateError("Due date must be on or after start date!");
-                          } else {
-                            setDateError("");
-                          }
+                          validateTaskDates(newTask.start_date, selected);
                         }}
                         className={`w-full px-2.5 py-1.5 border rounded-lg text-xs text-slate-800 dark:text-white dark:bg-slate-900 focus:outline-none focus:ring-2 cursor-pointer ${
-                          dateError ? "border-rose-400 focus:ring-rose-400/20" : "border-slate-200 dark:border-slate-700 focus:ring-indigo-500/20"
+                          dateError
+                            ? "border-rose-400 focus:ring-rose-400/20"
+                            : "border-slate-200 dark:border-slate-700 focus:ring-indigo-500/20"
                         }`}
                       />
                     </div>
@@ -2076,8 +2103,8 @@ const MentorDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={actionLoading || mentees.length === 0}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer flex items-center gap-2 transition-colors"
+                  disabled={actionLoading || mentees.length === 0 || Boolean(dateError)}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer flex items-center gap-2 transition-colors"
                 >
                   {actionLoading ? "Assigning..." : "Create & Assign Task"}
                 </button>

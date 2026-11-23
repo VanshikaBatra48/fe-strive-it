@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 import ThemeToggle from "../components/ThemeToggle";
+import { checkPasswordRules, getPasswordStrength } from "../utils/passwordValidation";
 
 const ChangePassword = () => {
   const navigate = useNavigate();
@@ -13,16 +14,46 @@ const ChangePassword = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [successMsg, setSuccessMsg] = useState(""); 
+  const [successMsg, setSuccessMsg] = useState("");
+
+  // Rule verification
+  const ruleResults = useMemo(() => {
+    return checkPasswordRules(newPassword);
+  }, [newPassword]);
+
+  const passedCount = useMemo(() => {
+    return ruleResults.filter((r) => r.passed).length;
+  }, [ruleResults]);
+
+  const isPasswordValid = passedCount === ruleResults.length;
+  const passwordsMatch = Boolean(confirmPassword && newPassword === confirmPassword);
+  const showPasswordMismatch = Boolean(
+    confirmPassword && newPassword && confirmPassword !== newPassword
+  );
+
+  // Strength score
+  const strengthInfo = useMemo(() => {
+    return getPasswordStrength(passedCount, Boolean(newPassword));
+  }, [newPassword, passedCount]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setSuccessMsg("");
-    
 
-    if (!newPassword || newPassword.length < 8 || newPassword.length > 72) {
-      setError("Password must be between 8 and 72 characters long.");
+    if (!newPassword) {
+      setError("Please enter your new password.");
+      return;
+    }
+
+    if (!isPasswordValid) {
+      const firstFailing = ruleResults.find((r) => !r.passed);
+      setError(firstFailing ? `Password requirement not met: ${firstFailing.label}` : "Password does not meet the requirements.");
+      return;
+    }
+
+    if (!confirmPassword) {
+      setError("Please confirm your new password.");
       return;
     }
 
@@ -33,19 +64,15 @@ const ChangePassword = () => {
 
     setSubmitting(true);
     const res = await changePassword(newPassword);
-
     setSubmitting(false);
 
     if (res.success) {
-        setSuccessMsg("Password updated successfully! Redirecting...");
-
-        navigate("/dashboard", { replace: true });
-}   else {
+      setSuccessMsg("Password updated successfully! Redirecting...");
+      navigate("/dashboard", { replace: true });
+    } else {
       setError(res.error || "Failed to update password.");
     }
   };
-
- 
 
   const handleLogout = () => {
     logout();
@@ -91,7 +118,7 @@ const ChangePassword = () => {
         </div>
 
         <p className="text-xs text-slate-300 leading-relaxed mb-6 bg-slate-900/50 p-3 rounded-lg border border-slate-700/60">
-          This is your first login. Please set a new personalized password (8–72 characters) to continue to your dashboard.
+          This is your first login. Please set a secure password satisfying all criteria below to proceed to your dashboard.
         </p>
 
         {/* Alerts */}
@@ -124,7 +151,11 @@ const ChangePassword = () => {
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
                 New Password
               </label>
-              <span className="text-[11px] text-slate-400">8–72 characters</span>
+              {strengthInfo && (
+                <span className={`text-[11px] font-semibold ${strengthInfo.text}`}>
+                  {strengthInfo.label}
+                </span>
+              )}
             </div>
             <div className="relative">
               <input
@@ -134,8 +165,15 @@ const ChangePassword = () => {
                 maxLength={72}
                 placeholder="Enter new password..."
                 value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 pr-10 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                onChange={(e) => {
+                  setNewPassword(e.target.value);
+                  if (error) setError("");
+                }}
+                className={`w-full px-3.5 py-2.5 pr-10 border rounded-lg text-sm text-white placeholder-slate-500 bg-slate-900 focus:outline-none transition-all ${
+                  newPassword.length > 0 && isPasswordValid
+                    ? "border-emerald-500/80 focus:ring-2 focus:ring-emerald-500/20"
+                    : "border-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                }`}
               />
               <button
                 type="button"
@@ -170,6 +208,53 @@ const ChangePassword = () => {
                 )}
               </button>
             </div>
+
+            {/* Strength Meter Bar */}
+            {strengthInfo && (
+              <div className="mt-2 w-full bg-slate-700/60 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${strengthInfo.color} ${strengthInfo.percent} transition-all duration-300 ease-out`}
+                />
+              </div>
+            )}
+
+            {/* Real-time Password Requirements Checklist */}
+            <div className="mt-2.5 p-3 rounded-lg bg-slate-900/60 border border-slate-700/60">
+              <span className="text-[11px] font-semibold text-slate-400 block mb-2 uppercase tracking-wider">
+                Password Requirements
+              </span>
+              <ul className="space-y-1.5">
+                {ruleResults.map((rule) => (
+                  <li
+                    key={rule.id}
+                    className={`flex items-center gap-2 text-xs transition-colors ${
+                      rule.passed
+                        ? "text-emerald-400 font-medium"
+                        : "text-slate-400"
+                    }`}
+                  >
+                    {rule.passed ? (
+                      <svg
+                        className="w-3.5 h-3.5 flex-shrink-0 text-emerald-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2.5"
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                    ) : (
+                      <div className="w-1.5 h-1.5 rounded-full bg-slate-500 mx-1 flex-shrink-0" />
+                    )}
+                    <span>{rule.label}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
 
           <div>
@@ -184,8 +269,17 @@ const ChangePassword = () => {
                 maxLength={72}
                 placeholder="Re-enter new password..."
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 pr-10 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (error) setError("");
+                }}
+                className={`w-full px-3.5 py-2.5 pr-10 border rounded-lg text-sm text-white placeholder-slate-500 bg-slate-900 focus:outline-none transition-all ${
+                  passwordsMatch
+                    ? "border-emerald-500/80 focus:ring-2 focus:ring-emerald-500/20"
+                    : showPasswordMismatch
+                    ? "border-rose-500/80 focus:ring-2 focus:ring-rose-500/20"
+                    : "border-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                }`}
               />
               <button
                 type="button"
@@ -220,14 +314,32 @@ const ChangePassword = () => {
                 )}
               </button>
             </div>
+
+            {/* Match Status Feedback */}
+            {passwordsMatch && (
+              <p className="text-[11px] text-emerald-400 font-medium flex items-center gap-1.5 mt-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                </svg>
+                Passwords match
+              </p>
+            )}
+            {showPasswordMismatch && (
+              <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1.5 mt-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Passwords do not match
+              </p>
+            )}
           </div>
 
           {/* Action Buttons */}
           <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
             <button
               type="submit"
-              disabled={submitting }
-              className="w-full sm:flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-sm font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+              disabled={submitting || !isPasswordValid || !passwordsMatch}
+              className="w-full sm:flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
             >
               {submitting ? (
                 <>
@@ -246,3 +358,4 @@ const ChangePassword = () => {
 };
 
 export default ChangePassword;
+
