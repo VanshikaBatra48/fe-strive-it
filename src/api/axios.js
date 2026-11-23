@@ -106,7 +106,7 @@ export async function refreshAccessToken() {
           headers: {
             'Content-Type': 'application/json',
           },
-          timeout: 10000,
+          timeout: 1000000,
         }
       )
       .then((response) => {
