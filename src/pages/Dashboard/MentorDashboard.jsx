@@ -323,6 +323,7 @@ const MentorDashboard = () => {
 
   // State
   const [activeTab, setActiveTab] = useState("dashboard"); // "dashboard", "mentees", "tasks", "reports"
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Filters
   const [menteeSearch, setMenteeSearch] = useState("");
@@ -745,25 +746,49 @@ const MentorDashboard = () => {
   };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[#f8fafc] dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
-      {/* Sidebar - Viewport pinned */}
-      <aside className="w-64 h-screen bg-[#111827] flex-shrink-0 flex flex-col justify-between border-r border-slate-800 z-30 select-none">
+    <div className="flex h-screen h-[100dvh] w-full overflow-hidden bg-[#f8fafc] dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
+      {/* Mobile Backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - Viewport pinned / Drawer on mobile */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 h-full bg-[#111827] flex-shrink-0 flex flex-col justify-between border-r border-slate-800 select-none transition-transform duration-300 ease-in-out lg:static lg:h-screen lg:translate-x-0 ${
+          sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+        }`}
+      >
         <div className="flex flex-col flex-1 min-h-0">
           {/* Brand Header */}
-          <div className="p-6 pb-6 flex items-center gap-3 flex-shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600/30 flex items-center justify-center text-white">
-              <svg className="w-5 h-5 text-indigo-400" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+          <div className="p-6 pb-6 flex items-center justify-between gap-3 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-indigo-600/30 flex items-center justify-center text-white">
+                <svg className="w-5 h-5 text-indigo-400" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                </svg>
+              </div>
+              <div>
+                <span className="text-lg font-bold text-white tracking-wide">
+                  TMS Mentor
+                </span>
+                <span className="block text-[10px] uppercase font-semibold text-indigo-400 tracking-wider">
+                  Mentorship Portal
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              aria-label="Close sidebar"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
-            </div>
-            <div>
-              <span className="text-lg font-bold text-white tracking-wide">
-                TMS Mentor
-              </span>
-              <span className="block text-[10px] uppercase font-semibold text-indigo-400 tracking-wider">
-                Mentorship Portal
-              </span>
-            </div>
+            </button>
           </div>
 
           {/* Navigation Links */}
@@ -771,6 +796,7 @@ const MentorDashboard = () => {
             <button
               onClick={() => {
                 setActiveTab("dashboard");
+                setSidebarOpen(false);
                 mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
               }}
               className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "dashboard"
@@ -787,6 +813,7 @@ const MentorDashboard = () => {
             <button
               onClick={() => {
                 setActiveTab("mentees");
+                setSidebarOpen(false);
                 mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
               }}
               className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "mentees"
@@ -808,6 +835,7 @@ const MentorDashboard = () => {
             <button
               onClick={() => {
                 setActiveTab("tasks");
+                setSidebarOpen(false);
                 mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
               }}
               className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "tasks"
@@ -827,9 +855,10 @@ const MentorDashboard = () => {
                 </span>
               )}
             </button>
-                        <button
+            <button
               onClick={() => {
                 setActiveTab("blockers");
+                setSidebarOpen(false);
                 mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
               }}
               className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "blockers"
@@ -853,7 +882,10 @@ const MentorDashboard = () => {
 
             <button
               type="button"
-              onClick={() => navigate("/chat")}
+              onClick={() => {
+                setSidebarOpen(false);
+                navigate("/chat");
+              }}
               className="w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60"
             >
               <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
@@ -890,16 +922,29 @@ const MentorDashboard = () => {
       </aside>
 
       {/* Main Content Area */}
-      <main ref={mainRef} className="flex-1 h-screen overflow-y-auto px-8 py-6">
+      <main ref={mainRef} className="flex-1 h-screen overflow-y-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
         {/* Top Navbar */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Workspace</span>
-            <span className="text-xs text-slate-300 dark:text-slate-600">/</span>
-            <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Mentor Hub</span>
+        <div className="flex items-center justify-between gap-2 sm:gap-3 mb-6">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer flex-shrink-0"
+              aria-label="Open navigation menu"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <span className="hidden sm:inline text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Workspace</span>
+              <span className="hidden sm:inline text-xs text-slate-300 dark:text-slate-600">/</span>
+              <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider truncate">Mentor Hub</span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 relative">
+          <div className="flex items-center gap-2 sm:gap-3 relative flex-shrink-0">
             {/* Dark Mode Toggle Button */}
             <ThemeToggle />
 
@@ -1360,8 +1405,8 @@ const MentorDashboard = () => {
             </div>
 
             {/* Tasks Table */}
-            <div className="w-full">
-              <table className="w-full text-left border-collapse">
+            <div className="w-full overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[700px]">
                 <thead>
                   <tr className="bg-slate-50/70 dark:bg-slate-900/60 border-b border-slate-200/80 dark:border-slate-700/80 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                     <th className="px-6 py-3.5">Task Title</th>
@@ -1674,7 +1719,7 @@ const MentorDashboard = () => {
             )}
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse min-w-[700px]">
                 <thead>
                   <tr className="bg-slate-50/70 dark:bg-slate-900/60 border-b border-slate-200/80 dark:border-slate-700/80 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                     <th className="px-6 py-3.5">Task</th>
@@ -1774,10 +1819,10 @@ const MentorDashboard = () => {
         )}
       </main>
 
-      {/* MODAL: ASSIGN TASK (FITS ON SCREEN, NON-SCROLLABLE 2-COLUMN LAYOUT) */}
+      {/* MODAL: ASSIGN TASK */}
       {showAssignModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-fadeIn">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-3xl w-full p-5 text-slate-800 dark:text-slate-100 max-h-[96vh] overflow-y-auto md:overflow-visible">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-3xl w-full p-5 text-slate-800 dark:text-slate-100 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-700">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-sm">
@@ -2249,7 +2294,7 @@ const MentorDashboard = () => {
       {/* MODAL: VIEW MENTEE DETAILS */}
       {viewingMentee && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6 text-slate-800 dark:text-slate-100">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6 text-slate-800 dark:text-slate-100 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
               <h3 className="text-base font-bold text-slate-900 dark:text-white">Mentee Profile</h3>
               <button

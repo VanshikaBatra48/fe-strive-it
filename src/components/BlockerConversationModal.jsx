@@ -51,9 +51,9 @@ const BlockerConversationModal = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-lg w-full flex flex-col max-h-[90vh] text-slate-800 dark:text-slate-100">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-lg w-full flex flex-col max-h-[90vh] overflow-hidden text-slate-800 dark:text-slate-100">
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 p-5 pb-3 border-b border-slate-100 dark:border-slate-700">
+        <div className="flex items-start justify-between gap-3 p-4 sm:p-5 pb-3 border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
           <div className="min-w-0">
             <h3 className="text-base font-bold text-slate-900 dark:text-white">Task Blocker</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
@@ -131,7 +131,7 @@ const BlockerConversationModal = ({
         </div>
 
         {/* Footer */}
-        <div className="p-5 pt-3 border-t border-slate-100 dark:border-slate-700">
+        <div className="p-4 sm:p-5 pt-3 border-t border-slate-100 dark:border-slate-700 flex-shrink-0">
           {conversation && isOpen ? (
             <form
               onSubmit={onSend}

@@ -30,14 +30,14 @@ const ROLE_STYLES = {
   },
 };
 
-function PersonCard({ user, role, footer, onClick, open }) {
+function PersonCard({ user, role, footer, onClick }) {
   const s = ROLE_STYLES[role];
   const inactive = (user.status || "").toLowerCase() === "inactive";
 
   return (
     <div
       onClick={onClick}
-      className={`relative z-10 w-full max-w-[15rem] min-w-0 rounded-xl border border-slate-200/80 dark:border-slate-700/80 border-t-4 ${s.top} bg-white dark:bg-slate-800 shadow-xs p-2 text-center ${
+      className={`relative z-10 w-full max-w-[15rem] min-w-[11rem] rounded-xl border border-slate-200/80 dark:border-slate-700/80 border-t-4 ${s.top} bg-white dark:bg-slate-800 shadow-xs p-2 text-center ${
         onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""
       }`}
     >
@@ -109,8 +109,8 @@ export default function HierarchyTree({ admin, mentors, mentees, resolveMenteeMe
       </div>
 
       {/* ORG CHART */}
-      <div className="pb-6">
-        <div className="w-full flex flex-col items-center">
+      <div className="pb-6 overflow-x-auto w-full">
+        <div className="min-w-fit flex flex-col items-center px-4">
           {/* ADMIN */}
           <PersonCard
             user={admin || { name: "Administrator", email: "" }}

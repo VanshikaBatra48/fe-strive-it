@@ -61,7 +61,7 @@ const Login = () => {
     };
 
     return (
-        <div className="relative min-h-screen w-full flex items-center justify-center p-4 sm:p-6 overflow-x-hidden overflow-y-auto">
+        <div className="relative min-h-screen min-h-[100dvh] w-full flex items-center justify-center p-4 sm:p-6 overflow-x-hidden overflow-y-auto">
             {/* High-Resolution Sliding Background Images with Smooth Cross-fade */}
             <div className="fixed inset-0 w-full h-full -z-10 overflow-hidden">
                 {BACKGROUND_IMAGES.map((img, index) => (
@@ -82,7 +82,7 @@ const Login = () => {
             </div>
 
             {/* Transparent Glassmorphic Login Card */}
-            <div className="relative w-full max-w-md bg-slate-900/40 backdrop-blur-xl rounded-2xl shadow-2xl shadow-black/60 border border-white/20 p-8 sm:p-10 z-10 transition-all">
+            <div className="relative w-full max-w-md bg-slate-900/40 backdrop-blur-xl rounded-2xl shadow-2xl shadow-black/60 border border-white/20 p-6 sm:p-10 z-10 transition-all">
                 {/* Top edge subtle highlight glow */}
                 <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent rounded-t-2xl pointer-events-none" />
 

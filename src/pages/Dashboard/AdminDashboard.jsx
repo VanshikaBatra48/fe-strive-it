@@ -41,10 +41,12 @@ function AdminDashboard() {
       ? tabFromUrl
       : "dashboard";
   });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const setActiveTab = (tab) => {
     setActiveTabState(tab);
     setSearchParams(tab === "dashboard" ? {} : { tab });
+    setSidebarOpen(false);
     mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -632,20 +634,44 @@ function AdminDashboard() {
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[#f8fafc] dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
-      {/* Sidebar - Fixed size and viewport pinned */}
-      <aside className="w-64 h-screen bg-[#111827] flex-shrink-0 flex flex-col justify-between border-r border-slate-800 z-30 select-none">
+    <div className="flex h-screen h-[100dvh] w-full overflow-hidden bg-[#f8fafc] dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
+      {/* Mobile Sidebar Backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - Responsive Drawer on Mobile / Fixed on Desktop */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 h-full bg-[#111827] flex-shrink-0 flex flex-col justify-between border-r border-slate-800 select-none transition-transform duration-300 ease-in-out lg:static lg:h-screen lg:translate-x-0 ${
+          sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+        }`}
+      >
         <div className="flex flex-col flex-1 min-h-0">
           {/* Logo & Brand */}
-          <div className="p-6 pb-6 flex items-center gap-3 flex-shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-blue-600/30 flex items-center justify-center text-white">
-              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
-              </svg>
+          <div className="p-6 pb-6 flex items-center justify-between gap-3 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-blue-600/30 flex items-center justify-center text-white">
+                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+                </svg>
+              </div>
+              <span className="text-lg font-bold text-white tracking-wide">
+                TMS Admin
+              </span>
             </div>
-            <span className="text-lg font-bold text-white tracking-wide">
-              TMS Admin
-            </span>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              aria-label="Close sidebar"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
           {/* Navigation Links */}
@@ -731,7 +757,10 @@ function AdminDashboard() {
             </button>
             <button
               type="button"
-              onClick={() => navigate("/chat")}
+              onClick={() => {
+                setSidebarOpen(false);
+                navigate("/chat");
+              }}
               className="w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60"
             >
               <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
@@ -759,27 +788,41 @@ function AdminDashboard() {
       </aside>
 
       {/* Main Content Area - Scrollable with hidden scrollbar */}
-      <main ref={mainRef} className="flex-1 h-screen overflow-y-auto no-scrollbar [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none] px-8 py-6">
+      <main ref={mainRef} className="flex-1 h-screen overflow-y-auto no-scrollbar [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none] px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
 
         {/* Top Navbar */}
-        <div className="flex items-center justify-between gap-3 mb-6 relative">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Workspace</span>
-            <span className="text-xs text-slate-300 dark:text-slate-600">/</span>
-            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-              {activeTab === "mentors"
-                ? "Mentors Management"
-                : activeTab === "mentees"
-                  ? "Mentees Management"
-                  : activeTab === "tasks"
-                    ? "All Tasks & Assignments"
-                    : activeTab === "hierarchy"
-                      ? "Team Hierarchy"
-                      : "Admin Portal"}
-            </span>
+        <div className="flex items-center justify-between gap-2 sm:gap-3 mb-6 relative">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {/* Mobile Hamburger Button */}
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer flex-shrink-0"
+              aria-label="Open navigation menu"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <span className="hidden sm:inline text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Workspace</span>
+              <span className="hidden sm:inline text-xs text-slate-300 dark:text-slate-600">/</span>
+              <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider truncate">
+                {activeTab === "mentors"
+                  ? "Mentors Management"
+                  : activeTab === "mentees"
+                    ? "Mentees Management"
+                    : activeTab === "tasks"
+                      ? "All Tasks & Assignments"
+                      : activeTab === "hierarchy"
+                        ? "Team Hierarchy"
+                        : "Admin Portal"}
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             <button
               type="button"
               onClick={() => navigate("/chat")}
@@ -1416,7 +1459,7 @@ function AdminDashboard() {
 
               {/* Table */}
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse min-w-[650px]">
                   <thead>
                     <tr className="bg-slate-50/70 dark:bg-slate-900/60 border-y border-slate-200/80 dark:border-slate-700/80">
                       <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
@@ -1720,7 +1763,7 @@ function AdminDashboard() {
 
               {/* Table */}
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse min-w-[650px]">
                   <thead>
                     <tr className="bg-slate-50/70 dark:bg-slate-900/60 border-y border-slate-200/80 dark:border-slate-700/80">
                       <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
@@ -2636,8 +2679,8 @@ function AdminDashboard() {
       {/* EDIT MODAL */}
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md overflow-hidden text-slate-800 dark:text-slate-100">
-            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden text-slate-800 dark:text-slate-100">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
                 Edit {editingUser.role === "mentor" ? "Mentor" : "Mentee"}
               </h3>
@@ -2649,7 +2692,7 @@ function AdminDashboard() {
               </button>
             </div>
 
-            <form onSubmit={handleUpdateSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleUpdateSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
               {modalError && (
                 <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 rounded-lg text-xs font-medium flex items-center gap-2">
                   <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -2771,8 +2814,8 @@ function AdminDashboard() {
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md overflow-hidden text-slate-800 dark:text-slate-100">
-              <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden text-slate-800 dark:text-slate-100">
+              <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
                 <div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-white">
                     {currentMentor ? "Change Assigned Mentor" : "Assign Mentor"}
@@ -2791,7 +2834,7 @@ function AdminDashboard() {
                 </button>
               </div>
 
-              <form onSubmit={handleAssignMentorSubmit} className="p-6 space-y-4">
+              <form onSubmit={handleAssignMentorSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
                 {assignError && (
                   <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 rounded-lg text-xs font-medium flex items-center gap-2">
                     <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">

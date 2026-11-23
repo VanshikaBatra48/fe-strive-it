@@ -256,6 +256,7 @@ const MenteeDashboard = () => {
 
   // State: "dashboard", "assignments", "feedback"
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [taskFilter, setTaskFilter] = useState("All");
 
     // ---- Notification -> highlight task ----
@@ -748,25 +749,49 @@ const MenteeDashboard = () => {
   };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[#f8fafc] dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
-      {/* Sidebar - Viewport pinned */}
-      <aside className="w-64 h-screen bg-[#111827] flex-shrink-0 flex flex-col justify-between border-r border-slate-800 z-30 select-none">
+    <div className="flex h-screen h-[100dvh] w-full overflow-hidden bg-[#f8fafc] dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
+      {/* Mobile Backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - Viewport pinned / Drawer on mobile */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 h-full bg-[#111827] flex-shrink-0 flex flex-col justify-between border-r border-slate-800 select-none transition-transform duration-300 ease-in-out lg:static lg:h-screen lg:translate-x-0 ${
+          sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+        }`}
+      >
         <div className="flex flex-col flex-1 min-h-0">
           {/* Brand Header */}
-          <div className="p-6 pb-6 flex items-center gap-3 flex-shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600/30 flex items-center justify-center text-white">
-              <svg className="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 2L1 7l11 5 9-4.09V17h2V7L12 2zm0 8.7L3.75 7 12 3.3 20.25 7 12 10.7zM4 10.5v6.2L12 21l8-4.3v-6.2l-8 4.3-8-4.3z" />
+          <div className="p-6 pb-6 flex items-center justify-between gap-3 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-600/30 flex items-center justify-center text-white">
+                <svg className="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2L1 7l11 5 9-4.09V17h2V7L12 2zm0 8.7L3.75 7 12 3.3 20.25 7 12 10.7zM4 10.5v6.2L12 21l8-4.3v-6.2l-8 4.3-8-4.3z" />
+                </svg>
+              </div>
+              <div>
+                <span className="text-lg font-bold text-white tracking-wide">
+                  TMS Mentee
+                </span>
+                <span className="block text-[10px] uppercase font-semibold text-emerald-400 tracking-wider">
+                  Intern Portal
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              aria-label="Close sidebar"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
-            </div>
-            <div>
-              <span className="text-lg font-bold text-white tracking-wide">
-                TMS Mentee
-              </span>
-              <span className="block text-[10px] uppercase font-semibold text-emerald-400 tracking-wider">
-                Intern Portal
-              </span>
-            </div>
+            </button>
           </div>
 
           {/* Navigation Links */}
@@ -774,6 +799,7 @@ const MenteeDashboard = () => {
             <button
               onClick={() => {
                 setActiveTab("dashboard");
+                setSidebarOpen(false);
                 mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
               }}
               className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "dashboard"
@@ -790,6 +816,7 @@ const MenteeDashboard = () => {
             <button
               onClick={() => {
                 setActiveTab("assignments");
+                setSidebarOpen(false);
                 mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
               }}
               className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "assignments"
@@ -811,6 +838,7 @@ const MenteeDashboard = () => {
             <button
               onClick={() => {
                 setActiveTab("feedback");
+                setSidebarOpen(false);
                 mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
               }}
               className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${activeTab === "feedback"
@@ -826,7 +854,10 @@ const MenteeDashboard = () => {
 
             <button
               type="button"
-              onClick={() => navigate("/chat")}
+              onClick={() => {
+                setSidebarOpen(false);
+                navigate("/chat");
+              }}
               className="w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800/60"
             >
               <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
@@ -863,16 +894,29 @@ const MenteeDashboard = () => {
       </aside>
 
       {/* Main Content Area */}
-      <main ref={mainRef} className="flex-1 h-screen overflow-y-auto px-8 py-6">
+      <main ref={mainRef} className="flex-1 h-screen overflow-y-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
         {/* Top Navbar */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Workspace</span>
-            <span className="text-xs text-slate-300 dark:text-slate-600">/</span>
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Intern Portal</span>
+        <div className="flex items-center justify-between gap-2 sm:gap-3 mb-6">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer flex-shrink-0"
+              aria-label="Open navigation menu"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <span className="hidden sm:inline text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Workspace</span>
+              <span className="hidden sm:inline text-xs text-slate-300 dark:text-slate-600">/</span>
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider truncate">Intern Portal</span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 relative">
+          <div className="flex items-center gap-2 sm:gap-3 relative flex-shrink-0">
             {/* Running timer pill: visible from every tab */}
             {activeTimer && (
               <button
@@ -882,10 +926,10 @@ const MenteeDashboard = () => {
                   mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
                 }}
                 title="Timer running. Click to open your focus task"
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 text-xs font-semibold cursor-pointer"
+                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 text-xs font-semibold cursor-pointer"
               >
                 <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                <span className="max-w-[140px] truncate">{activeTimer.log.task?.title ?? "Task"}</span>
+                <span className="max-w-[70px] sm:max-w-[140px] truncate">{activeTimer.log.task?.title ?? "Task"}</span>
                 <span className="font-mono">{formatDuration(elapsedSeconds)}</span>
               </button>
             )}
@@ -914,12 +958,12 @@ const MenteeDashboard = () => {
             <button
               onClick={() => openSubmitModal(focusTask)}
               disabled={!focusTask || focusTask.status === "submitted" || focusTask.status === "complete"}
-              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
-              <span>
+              <span className="hidden sm:inline">
                 {focusTask?.status === "needs-revision"
                   ? "Re-submit Task"
                   : focusTask?.status === "submitted"
@@ -1764,10 +1808,10 @@ const MenteeDashboard = () => {
         )}
       </main>
 
-      {/* MODAL: SUBMIT ASSIGNMENT (FITS ON SCREEN, NON-SCROLLABLE 2-COLUMN LAYOUT) */}
+      {/* MODAL: SUBMIT ASSIGNMENT */}
       {submittingTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-fadeIn">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-2xl w-full p-5 text-slate-800 dark:text-slate-100 max-h-[96vh] overflow-y-auto md:overflow-visible">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-2xl w-full p-5 text-slate-800 dark:text-slate-100 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-700">
               <div className="flex items-center gap-2 min-w-0">
                 <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-sm flex-shrink-0">
@@ -1927,7 +1971,7 @@ const MenteeDashboard = () => {
       {/* MODAL: VIEW FEEDBACK */}
       {viewingFeedbackTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6 text-slate-800 dark:text-slate-100">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6 text-slate-800 dark:text-slate-100 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
               <h3 className="text-base font-bold text-slate-900 dark:text-white">Mentor Evaluation</h3>
               <button
@@ -1973,7 +2017,7 @@ const MenteeDashboard = () => {
           {blockerTask && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
 
-              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
 
                 {/* Header */}
                 <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700">

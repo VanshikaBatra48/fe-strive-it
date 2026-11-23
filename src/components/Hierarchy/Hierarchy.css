@@ -100,3 +100,21 @@
 .hierarchy-error {
   color: #b91c1c;
 }
+
+@media (max-width: 600px) {
+  .hierarchy-page {
+    padding: 16px;
+  }
+  .tree-list {
+    padding-left: 12px;
+  }
+  .tree-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tree-email {
+    margin-left: 0;
+    width: 100%;
+    font-size: 11px;
+  }
+}

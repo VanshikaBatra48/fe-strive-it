@@ -53,9 +53,9 @@ const ChangePassword = () => {
   };
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-center p-4 sm:p-6 bg-slate-900 text-slate-100">
+    <div className="relative min-h-screen min-h-[100dvh] w-full flex flex-col items-center justify-center p-4 sm:p-6 bg-slate-900 text-slate-100 overflow-y-auto">
       {/* Top Navbar items */}
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-3">
+      <div className="w-full max-w-md flex items-center justify-end gap-3 mb-4 sm:absolute sm:top-4 sm:right-4 sm:mb-0 sm:w-auto z-20">
         <ThemeToggle />
         <button
           type="button"
@@ -67,7 +67,7 @@ const ChangePassword = () => {
       </div>
 
       {/* Main Card */}
-      <div className="relative w-full max-w-md bg-slate-800/90 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700 p-6 sm:p-8">
+      <div className="relative w-full max-w-md bg-slate-800/90 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700 p-5 sm:p-8">
         {/* Header */}
         <div className="flex items-center gap-3.5 mb-6">
           <div className="w-12 h-12 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center flex-shrink-0 shadow-xs">

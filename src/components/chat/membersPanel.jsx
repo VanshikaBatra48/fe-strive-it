@@ -153,7 +153,7 @@ export default function MembersPanel({ groupId, me, onClose, onChanged, onDelete
   );
 
   return (
-    <aside className="w-80 sm:w-96 border-l border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#111827] flex flex-col h-full shadow-lg z-20 flex-shrink-0 animate-fadeIn">
+    <aside className="fixed inset-y-0 right-0 z-40 w-full sm:w-96 md:static md:w-80 lg:w-96 border-l border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#111827] flex flex-col h-full shadow-2xl md:shadow-lg flex-shrink-0 animate-fadeIn">
       {/* Panel Top Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
         <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">

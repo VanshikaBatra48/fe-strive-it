@@ -72,6 +72,7 @@ export default function ChatWindow({
   onDelete,
   onTyping,
   onToggleMembers,
+  onBack,
 }) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
@@ -140,47 +141,63 @@ export default function ChatWindow({
       {/* ========================================================
           CHAT HEADER: CLICKING ON GROUP NAME OPENS GROUP DETAILS
           ======================================================== */}
-      <header className="flex items-center justify-between px-4 sm:px-6 py-3 bg-white dark:bg-[#111827] border-b border-slate-200/80 dark:border-slate-800 shadow-2xs z-10 flex-shrink-0">
-        <button
-          type="button"
-          onClick={onToggleMembers}
-          title="Click to view group details & members"
-          className="flex items-center gap-3 p-1.5 -ml-1.5 rounded-xl hover:bg-slate-100/90 dark:hover:bg-slate-700/60 transition-all text-left cursor-pointer group max-w-[80%]"
-        >
-          {/* Group Avatar */}
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white font-bold flex items-center justify-center flex-shrink-0 shadow-xs group-hover:scale-105 transition-transform text-sm tracking-wide">
-            #
-          </div>
+      <header className="flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3 bg-white dark:bg-[#111827] border-b border-slate-200/80 dark:border-slate-800 shadow-2xs z-10 flex-shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 max-w-[80%]">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="md:hidden p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex-shrink-0"
+              title="Back to conversations"
+              aria-label="Back to conversations"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
 
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                {group.name}
-              </h2>
-              {isArchived ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
-                  <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+          <button
+            type="button"
+            onClick={onToggleMembers}
+            title="Click to view group details & members"
+            className="flex items-center gap-2.5 sm:gap-3 p-1 rounded-xl hover:bg-slate-100/90 dark:hover:bg-slate-700/60 transition-all text-left cursor-pointer group min-w-0"
+          >
+            {/* Group Avatar */}
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white font-bold flex items-center justify-center flex-shrink-0 shadow-xs group-hover:scale-105 transition-transform text-sm tracking-wide">
+              #
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                  {group.name}
+                </h2>
+                {isArchived ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
+                    <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                    </svg>
+                    Archived
+                  </span>
+                ) : (
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" title="Active group" />
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                <span>{group.memberCount ? `${group.memberCount} members` : 'Group details'}</span>
+                <span>·</span>
+                <span className="text-indigo-600 dark:text-indigo-400 group-hover:underline flex items-center gap-0.5 font-medium">
+                  View info
+                  <svg className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
-                  Archived
                 </span>
-              ) : (
-                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" title="Active group" />
-              )}
+              </div>
             </div>
-
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-              <span>{group.memberCount ? `${group.memberCount} members` : 'Group details'}</span>
-              <span>·</span>
-              <span className="text-indigo-600 dark:text-indigo-400 group-hover:underline flex items-center gap-0.5 font-medium">
-                View info
-                <svg className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </span>
-            </div>
-          </div>
-        </button>
+          </button>
+        </div>
 
         {/* Right Info Quick Trigger */}
         <div className="flex items-center gap-2">
